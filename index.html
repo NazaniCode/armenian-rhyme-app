@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="hy">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Armenian Rhyme Finder</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .subtitle {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .search-section {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            margin-bottom: 30px;
+        }
+
+        .search-container {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+        }
+
+        .input-group {
+            flex: 1;
+            min-width: 250px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .input-group input,
+        .input-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+
+        .input-group input:focus,
+        .input-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .autocomplete-list {
+            position: absolute;
+            background: white;
+            border: 1px solid #ddd;
+            border-top: none;
+            max-height: 200px;
+            overflow-y: auto;
+            width: calc(100% - 4px);
+            border-radius: 0 0 6px 6px;
+            z-index: 100;
+        }
+
+        .autocomplete-item {
+            padding: 10px 12px;
+            cursor: pointer;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .autocomplete-item:hover {
+            background-color: #f5f5f5;
+        }
+
+        .input-group {
+            position: relative;
+        }
+
+        button {
+            padding: 12px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+            color: white;
+        }
+
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 3px solid white;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .results-section {
+            display: none;
+        }
+
+        .results-header {
+            background: white;
+            padding: 20px;
+            border-radius: 12px 12px 0 0;
+            margin-bottom: 0;
+        }
+
+        .result-count {
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .results-container {
+            background: white;
+            border-radius: 0 0 12px 12px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .rhyme-item {
+            padding: 20px;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background-color 0.2s;
+        }
+
+        .rhyme-item:last-child {
+            border-bottom: none;
+        }
+
+        .rhyme-item:hover {
+            background-color: #f9f9f9;
+        }
+
+        .rhyme-word {
+            font-size: 1.3em;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .rhyme-meta {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+
+        .badge.perfect {
+            background-color: #4caf50;
+            color: white;
+        }
+
+        .badge.near-perfect {
+            background-color: #8bc34a;
+            color: white;
+        }
+
+        .badge.assonance {
+            background-color: #2196f3;
+            color: white;
+        }
+
+        .badge.slant {
+            background-color: #ff9800;
+            color: white;
+        }
+
+        .score {
+            background-color: #e3f2fd;
+            color: #1976d2;
+            padding: 5px 12px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        .pos {
+            color: #999;
+            font-size: 0.9em;
+        }
+
+        .definition {
+            color: #666;
+            font-size: 0.95em;
+            margin-top: 8px;
+            font-style: italic;
+        }
+
+        .error {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            border-left: 4px solid #f44336;
+            color: #f44336;
+            font-weight: 600;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .stats {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-size: 0.9em;
+            text-align: center;
+            margin-top: 30px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #999;
+        }
+
+        .empty-state-icon {
+            font-size: 3em;
+            margin-bottom: 15px;
+            opacity: 0.5;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2em;
+            }
+
+            .search-container {
+                flex-direction: column;
+            }
+
+            .input-group {
+                min-width: unset;
+            }
+
+            button {
+                width: 100%;
+            }
+
+            .rhyme-meta {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎵 Armenian Rhyme Finder</h1>
+            <p class="subtitle">Բացեք մահճային հավերժ հնչերուն տկարները</p>
+        </header>
+
+        <div class="search-section">
+            <div class="search-container">
+                <div class="input-group">
+                    <label for="wordInput">Մուտքագրեք բառ</label>
+                    <input 
+                        type="text" 
+                        id="wordInput" 
+                        placeholder="Օր. գլուխ, սեր, լույս..."
+                        autocomplete="off"
+                    >
+                    <div id="autocompleteList" class="autocomplete-list"></div>
+                </div>
+
+                <div class="input-group">
+                    <label for="limitInput">Արդյունքներ</label>
+                    <select id="limitInput">
+                        <option value="10">10</option>
+                        <option value="25" selected>25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
+
+                <div class="input-group" style="display: flex; align-items: flex-end; gap: 10px;">
+                    <label style="flex: 1; margin-bottom: 0;">
+                        <input 
+                            type="checkbox" 
+                            id="includeTenses" 
+                            style="width: auto; margin-right: 8px; cursor: pointer;"
+                        >
+                        Ներառել հակեր
+                    </label>
+                </div>
+
+                <button id="searchBtn">Որոնել</button>
+            </div>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Որոնում...</p>
+        </div>
+
+        <div class="error" id="error"></div>
+
+        <div class="results-section" id="resultsSection">
+            <div class="results-header">
+                <h2>Արդյունքներ</h2>
+                <p class="result-count" id="resultCount"></p>
+            </div>
+            <div class="results-container" id="resultsContainer"></div>
+        </div>
+
+        <div class="stats" id="stats"></div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:5000/api';
+
+        let debounceTimer;
+
+        // Load dictionary stats on page load
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const response = await fetch(`${API_URL}/stats`);
+                const data = await response.json();
+                document.getElementById('stats').innerHTML = 
+                    `📚 Բառարան՝ ${data.total_words.toLocaleString()} բառ`;
+            } catch (e) {
+                console.error('Error loading stats:', e);
+            }
+        });
+
+        // Autocomplete functionality
+        const wordInput = document.getElementById('wordInput');
+        const autocompleteList = document.getElementById('autocompleteList');
+
+        wordInput.addEventListener('input', (e) => {
+            clearTimeout(debounceTimer);
+            const query = e.target.value.trim();
+
+            if (query.length < 1) {
+                autocompleteList.innerHTML = '';
+                return;
+            }
+
+            debounceTimer = setTimeout(async () => {
+                try {
+                    const response = await fetch(`${API_URL}/search?q=${encodeURIComponent(query)}`);
+                    const data = await response.json();
+                    
+                    if (data.results.length > 0) {
+                        autocompleteList.innerHTML = data.results.map(result => `
+                            <div class="autocomplete-item" onclick="selectWord('${result.word.replace(/'/g, "\\'")}')">
+                                <strong>${result.word}</strong><br>
+                                <span style="color: #999; font-size: 0.85em;">${result.pos} - ${result.definition}</span>
+                            </div>
+                        `).join('');
+                    } else {
+                        autocompleteList.innerHTML = '';
+                    }
+                } catch (e) {
+                    console.error('Error in autocomplete:', e);
+                }
+            }, 300);
+        });
+
+        function selectWord(word) {
+            wordInput.value = word;
+            autocompleteList.innerHTML = '';
+            search();
+        }
+
+        // Search functionality
+        const searchBtn = document.getElementById('searchBtn');
+        wordInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                search();
+            }
+        });
+
+        searchBtn.addEventListener('click', search);
+
+        async function search() {
+            const word = wordInput.value.trim();
+            const limit = document.getElementById('limitInput').value;
+            const includeTenses = document.getElementById('includeTenses').checked;
+
+            if (!word) {
+                showError('Please enter a word');
+                return;
+            }
+
+            showLoading(true);
+            hideError();
+
+            try {
+                const response = await fetch(
+                    `${API_URL}/rhymes?word=${encodeURIComponent(word)}&limit=${limit}&include_tenses=${includeTenses}`
+                );
+
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+
+                const data = await response.json();
+                displayResults(data);
+            } catch (error) {
+                showError('Error searching for rhymes: ' + error.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function displayResults(data) {
+            const resultsSection = document.getElementById('resultsSection');
+            const resultsContainer = document.getElementById('resultsContainer');
+            const resultCount = document.getElementById('resultCount');
+
+            const word = data.word;
+            const rhymes = data.rhymes;
+
+            resultCount.textContent = `Found ${rhymes.length} rhymes for "${word}"`;
+
+            if (rhymes.length === 0) {
+                resultsContainer.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">🔍</div>
+                        <p>No rhymes found for "${word}"</p>
+                    </div>
+                `;
+                resultsSection.style.display = 'block';
+                return;
+            }
+
+            resultsContainer.innerHTML = rhymes.map(rhyme => {
+                const formIndicator = !rhyme.is_base_form ? ' <span style="color: #999; font-size: 0.85em;">(տ)</span>' : '';
+                return `
+                    <div class="rhyme-item">
+                        <div class="rhyme-word">
+                            ${rhyme.word}${formIndicator}
+                            ${rhyme.base_word && rhyme.word !== rhyme.base_word ? `<span style="color: #999; font-size: 0.85em; margin-left: 10px;">← ${rhyme.base_word}</span>` : ''}
+                        </div>
+                        <div class="rhyme-meta">
+                            <span class="badge ${rhyme.label}">${rhyme.label}</span>
+                            <span class="score">Similarity: ${(rhyme.similarity * 100).toFixed(1)}%</span>
+                            <span class="pos">${rhyme.part_of_speech}</span>
+                        </div>
+                        <div class="definition">📖 ${rhyme.definition}</div>
+                    </div>
+                `;
+            }).join('');
+
+            resultsSection.style.display = 'block';
+        }
+
+        function showLoading(show) {
+            document.getElementById('loading').style.display = show ? 'block' : 'none';
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+
+        function hideError() {
+            document.getElementById('error').style.display = 'none';
+        }
+
+        // Close autocomplete when clicking outside
+        document.addEventListener('click', (e) => {
+            if (e.target !== wordInput) {
+                autocompleteList.innerHTML = '';
+            }
+        });
+    </script>
+</body>
+</html>

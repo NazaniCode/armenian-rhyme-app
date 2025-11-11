@@ -1,0 +1,185 @@
+╔════════════════════════════════════════════════════════════════╗
+║         Armenian Rhyme Finder - Quick Start Guide              ║
+╚════════════════════════════════════════════════════════════════╝
+
+⚡ FASTEST WAY TO START (5 minutes):
+═══════════════════════════════════════════════════════════════════
+
+1. Double-click: START.BAT
+   (A window will open and tell you the next steps)
+
+2. Open your browser to:
+   file:///c:/Users/Nazani/Desktop/armenian-rhyme-app/index.html
+
+3. Start typing Armenian words!
+
+✓ Done! 🎵
+
+
+📋 STEP-BY-STEP SETUP:
+═══════════════════════════════════════════════════════════════════
+
+If double-clicking start.bat doesn't work:
+
+Step 1: Install Python (if not already installed)
+   → Download from python.org
+   → Run installer, check "Add Python to PATH"
+   → Restart your computer
+
+Step 2: Install dependencies
+   → Open Command Prompt
+   → Type: pip install -r requirements.txt
+   → Press Enter
+
+Step 3: Start the backend
+   → Open Command Prompt in this folder
+   → Type: python app.py
+   → Press Enter
+   → Wait for "Running on http://127.0.0.1:5000"
+
+Step 4: Open the frontend
+   → Drag index.html into your browser
+   → Or open file:///c:/Users/Nazani/Desktop/armenian-rhyme-app/index.html
+
+Step 5: Search for rhymes!
+   → Type an Armenian word
+   → Press Enter or click Search
+   → Browse results
+
+
+🔍 USING THE APP:
+═══════════════════════════════════════════════════════════════════
+
+• Enter a word in Armenian
+• Autocomplete shows suggestions
+• Results sorted by quality:
+  - Perfect    (identical sound)
+  - Near-perf. (very similar)
+  - Assonance  (same vowel)
+  - Slant      (similar sounds)
+
+• Each result shows:
+  ✓ Word
+  ✓ Rhyme quality badge
+  ✓ Similarity percentage (0-100%)
+  ✓ Part of speech
+  ✓ Definition
+
+
+🆘 TROUBLESHOOTING:
+═══════════════════════════════════════════════════════════════════
+
+❌ "Python not found"
+   → Install Python from python.org
+   → Check "Add to PATH" during install
+
+❌ "Module not found: flask"
+   → Run: pip install -r requirements.txt
+
+❌ "Dictionary file not found"
+   → Verify dictionary-hy.cleaned.jsonl exists here
+   → Check file isn't named differently
+
+❌ "Port 5000 already in use"
+   → Run: python app.py --port 5001
+   → Or restart your computer
+
+❌ Search shows no results
+   → Use autocomplete to find existing words
+   → Try: գլուխ, սեր, լույս
+
+
+📁 IMPORTANT FILES:
+═══════════════════════════════════════════════════════════════════
+
+✓ app.py                     - Backend server
+✓ index.html                 - Web interface
+✓ dictionary-hy.cleaned.jsonl - Word database (MUST be here!)
+✓ config.py                  - Settings
+✓ requirements.txt           - Python packages needed
+
+
+🚀 ADVANCED USAGE:
+═══════════════════════════════════════════════════════════════════
+
+Test the algorithm:
+   python test_rhymes.py
+
+Use as Python library:
+   from app import load_dictionary, find_rhymes
+   load_dictionary('dictionary-hy.cleaned.jsonl')
+   rhymes = find_rhymes('սեր', limit=10)
+
+Access API directly:
+   http://localhost:5000/api/rhymes?word=սեր&limit=25
+   http://localhost:5000/api/search?q=բա
+   http://localhost:5000/api/stats
+
+
+📚 DOCUMENTATION:
+═══════════════════════════════════════════════════════════════════
+
+README.md           - Full project documentation
+SETUP_GUIDE.md      - Detailed setup instructions
+config.py           - Settings and thresholds
+
+
+⌨️ KEYBOARD SHORTCUTS (Web Interface):
+═══════════════════════════════════════════════════════════════════
+
+Enter (in search box)  - Search
+Arrow Down             - Select autocomplete
+Escape                 - Clear autocomplete
+
+
+🎯 COMMON TASKS:
+═══════════════════════════════════════════════════════════════════
+
+Search for rhymes:
+   1. Type word → press Enter
+   2. Results show immediately
+
+Find specific word:
+   1. Start typing → autocomplete shows matches
+   2. Click suggestion or press Enter
+
+Change number of results:
+   1. Use dropdown (10, 25, 50, 100)
+   2. Search again
+
+Understand rhyme types:
+   - Perfect: Sounds identical (բառ ↔ տառ)
+   - Near-perf: Very similar, same vowel
+   - Assonance: Same vowel, decent similarity
+   - Slant: Similar consonants or vowels
+
+
+💡 TIPS & TRICKS:
+═══════════════════════════════════════════════════════════════════
+
+• First search loads dictionary (~3 seconds)
+• Autocomplete searches are instant
+• Try basic words: գլուխ (head), սեր (love), լույս (light)
+• Read definitions to verify word meaning
+• Similarity score shows how close the rhyme is
+• Filter by badge type for different rhyme strengths
+
+
+❓ NEED MORE HELP?
+═══════════════════════════════════════════════════════════════════
+
+1. Read SETUP_GUIDE.md for detailed instructions
+2. Check rhyme_finder.log for errors
+3. Test setup: python test_rhymes.py
+4. Review comments in app.py for implementation details
+
+
+═══════════════════════════════════════════════════════════════════
+
+Ready to find Armenian rhymes? Let's go! 🎵
+
+Questions? Check SETUP_GUIDE.md
+Issues? See TROUBLESHOOTING section above
+Want details? Read README.md
+
+═══════════════════════════════════════════════════════════════════
