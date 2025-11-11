@@ -174,43 +174,99 @@ def phone_distance(phone1: str, phone2: str) -> float:
     return 1.0
 
 
-def levenshtein_similarity(tail1: List[str], tail2: List[str]) -> float:
+def levenshtein_similarity(tail1: List[str], tail2: List[str], is_last_syllable: bool = False) -> float:
     """
-    Feature-aware Levenshtein distance with similarity scoring.
+    Vowel-weighted Levenshtein distance with similarity scoring.
+    Vowels are weighted more heavily than consonants for rhyme matching.
     Returns score from 0 to 1, where 1 is identical.
+    
+    Args:
+        tail1: First phoneme sequence
+        tail2: Second phoneme sequence
+        is_last_syllable: If True, gives extra weight to vowels (nucleus)
     """
     m, n = len(tail1), len(tail2)
     
-    # DP table
-    dp = [[0] * (n + 1) for _ in range(m + 1)]
+    if m == 0 and n == 0:
+        return 1.0
+    if m == 0 or n == 0:
+        return 0.0
     
-    # Initialize base cases
-    for i in range(m + 1):
-        dp[i][0] = i
-    for j in range(n + 1):
-        dp[0][j] = j
+    # Find the vowel (nucleus) positions - most important for rhyming
+    vowel_pos1 = -1
+    vowel_pos2 = -1
+    for i, phone in enumerate(tail1):
+        if phone in VOWELS:
+            vowel_pos1 = i
+            break  # Take first vowel (nucleus)
+    for i, phone in enumerate(tail2):
+        if phone in VOWELS:
+            vowel_pos2 = i
+            break
     
-    # Fill DP table with feature-aware costs
+    # DP table with weighted costs
+    dp = [[0.0] * (n + 1) for _ in range(m + 1)]
+    
+    # Initialize base cases with weighted costs
+    for i in range(1, m + 1):
+        weight = 1.5 if tail1[i-1] in VOWELS else 1.0
+        dp[i][0] = dp[i-1][0] + weight
+    for j in range(1, n + 1):
+        weight = 1.5 if tail2[j-1] in VOWELS else 1.0
+        dp[0][j] = dp[0][j-1] + weight
+    
+    # Fill DP table with vowel-weighted costs
     for i in range(1, m + 1):
         for j in range(1, n + 1):
-            if tail1[i-1] == tail2[j-1]:
+            phone1 = tail1[i-1]
+            phone2 = tail2[j-1]
+            
+            # Weight calculation: vowels are more important than consonants
+            is_vowel1 = phone1 in VOWELS
+            is_vowel2 = phone2 in VOWELS
+            
+            # Base weight: 1.5 for vowels, 1.0 for consonants
+            base_weight = 1.5 if (is_vowel1 or is_vowel2) else 1.0
+            
+            # Extra weight if this is the nucleus (primary vowel) of last syllable
+            if is_last_syllable and ((i-1 == vowel_pos1) or (j-1 == vowel_pos2)):
+                base_weight *= 1.3  # 30% more weight for nucleus vowel
+            
+            if phone1 == phone2:
                 cost = 0
             else:
-                cost = phone_distance(tail1[i-1], tail2[j-1])
+                # Use phone_distance but weight vowel mismatches more heavily
+                base_distance = phone_distance(phone1, phone2)
+                cost = base_distance * base_weight
             
             dp[i][j] = min(
-                dp[i-1][j] + 1,      # deletion
-                dp[i][j-1] + 1,      # insertion
-                dp[i-1][j-1] + cost  # substitution
+                dp[i-1][j] + base_weight,      # deletion
+                dp[i][j-1] + base_weight,      # insertion
+                dp[i-1][j-1] + cost             # substitution
             )
     
     distance = dp[m][n]
-    max_len = max(m, n)
-    if max_len == 0:
+    
+    # Calculate max possible distance with weights
+    max_distance = 0.0
+    for i in range(max(m, n)):
+        if i < m:
+            weight = 1.5 if tail1[i] in VOWELS else 1.0
+            if is_last_syllable and i == vowel_pos1:
+                weight *= 1.3
+            max_distance += weight
+        if i < n:
+            weight = 1.5 if tail2[i] in VOWELS else 1.0
+            if is_last_syllable and i == vowel_pos2:
+                weight *= 1.3
+            max_distance += weight
+    max_distance /= 2.0  # Average of the two
+    
+    if max_distance == 0:
         return 1.0
     
-    similarity = 1.0 - (distance / max_len)
-    return max(0.0, similarity)
+    similarity = 1.0 - (distance / max_distance)
+    return max(0.0, min(1.0, similarity))
 
 
 def calculate_multi_syllable_rhyme_score(ipa1: List[str], ipa2: List[str]) -> Dict:
@@ -234,9 +290,10 @@ def calculate_multi_syllable_rhyme_score(ipa1: List[str], ipa2: List[str]) -> Di
         }
     
     # Calculate last syllable similarity (most important)
+    # Use vowel weighting for last syllable - vowels matter more for rhyming!
     last_syl1 = syllables1[-1]
     last_syl2 = syllables2[-1]
-    last_syllable_sim = levenshtein_similarity(last_syl1, last_syl2)
+    last_syllable_sim = levenshtein_similarity(last_syl1, last_syl2, is_last_syllable=True)
     
     # Check if last syllables are identical
     last_syllables_identical = last_syl1 == last_syl2
@@ -262,7 +319,7 @@ def calculate_multi_syllable_rhyme_score(ipa1: List[str], ipa2: List[str]) -> Di
                 # Identical syllables count
                 syllables_matched += 1
             else:
-                sim = levenshtein_similarity(syl1, syl2)
+                sim = levenshtein_similarity(syl1, syl2, is_last_syllable=False)
                 # For additional syllables, require very high similarity (90%+)
                 # This ensures we only give bonus for true multi-syllable rhymes
                 if sim >= 0.90:
