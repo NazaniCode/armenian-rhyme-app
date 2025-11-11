@@ -1,5 +1,7 @@
 # Armenian Rhyme Finder 🎵
 
+**⚠️ Private Repository** - This is a private project. Access is limited to authorized contributors only.
+
 A sophisticated web application for discovering Armenian rhymes based on IPA (International Phonetic Alphabet) phoneme similarity analysis. The app uses intelligent feature-aware algorithms to identify different types of rhymes.
 
 ## Features
