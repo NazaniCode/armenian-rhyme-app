@@ -502,6 +502,7 @@
                         <div class="rhyme-meta">
                             <span class="badge ${rhyme.label}">${rhyme.label}</span>
                             <span class="score">Similarity: ${(rhyme.similarity * 100).toFixed(1)}%</span>
+                            ${rhyme.syllables_matched > 1 ? `<span class="score" style="color: #28a745;">🎵 ${rhyme.syllables_matched} syllables</span>` : ''}
                             <span class="pos">${rhyme.part_of_speech}</span>
                         </div>
                         <div class="definition">📖 ${rhyme.definition}</div>

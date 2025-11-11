@@ -76,25 +76,66 @@ def load_dictionary(filepath: str):
                         form_to_entries[form].append((word, idx))
 
 
-def extract_rhyme_tail(ipa_phones: List[str]) -> List[str]:
+def split_into_syllables(ipa_phones: List[str]) -> List[List[str]]:
     """
-    Extract rhyme tail: from last vowel to end (nucleus + coda).
-    Returns phones from the last vowel onward.
+    Split IPA phones into syllables.
+    Each syllable has: (optional onset consonants) + vowel + (optional coda consonants)
     """
     if not ipa_phones:
         return []
     
-    # Find the last vowel
-    last_vowel_idx = -1
-    for i in range(len(ipa_phones) - 1, -1, -1):
-        if ipa_phones[i] in VOWELS:
-            last_vowel_idx = i
-            break
+    syllables = []
+    current_syllable = []
     
-    if last_vowel_idx == -1:
-        return ipa_phones  # No vowel found, return all
+    for phone in ipa_phones:
+        current_syllable.append(phone)
+        
+        # If we hit a vowel, we might be in the middle of a syllable
+        # Continue until we hit another vowel or run out of phones
+        if phone in VOWELS:
+            # Collect consonants after this vowel (coda)
+            continue
     
-    return ipa_phones[last_vowel_idx:]
+    # Group phones into syllables by finding vowels
+    syllables = []
+    i = 0
+    while i < len(ipa_phones):
+        syllable = []
+        
+        # Collect onset consonants
+        while i < len(ipa_phones) and ipa_phones[i] not in VOWELS:
+            syllable.append(ipa_phones[i])
+            i += 1
+        
+        # Collect vowel (nucleus)
+        if i < len(ipa_phones) and ipa_phones[i] in VOWELS:
+            syllable.append(ipa_phones[i])
+            i += 1
+        
+        # Collect coda consonants (until next vowel or end)
+        while i < len(ipa_phones) and ipa_phones[i] not in VOWELS:
+            # Check if this consonant should start the next syllable
+            # If there are multiple consonants, split them between syllables
+            if i + 1 < len(ipa_phones) and ipa_phones[i + 1] in VOWELS:
+                # Next is a vowel, so this consonant starts the next syllable
+                break
+            syllable.append(ipa_phones[i])
+            i += 1
+        
+        if syllable:
+            syllables.append(syllable)
+    
+    return syllables
+
+
+def extract_rhyme_tail(ipa_phones: List[str]) -> List[str]:
+    """
+    Extract rhyme tail: the last syllable (onset + nucleus + coda).
+    """
+    syllables = split_into_syllables(ipa_phones)
+    if syllables:
+        return syllables[-1]
+    return ipa_phones
 
 
 def phone_distance(phone1: str, phone2: str) -> float:
@@ -172,14 +213,107 @@ def levenshtein_similarity(tail1: List[str], tail2: List[str]) -> float:
     return max(0.0, similarity)
 
 
-def get_rhyme_label(tail1: List[str], tail2: List[str], similarity: float) -> str:
+def calculate_multi_syllable_rhyme_score(ipa1: List[str], ipa2: List[str]) -> Dict:
+    """
+    Calculate comprehensive rhyme score considering all syllables.
+    Returns a dict with:
+    - final_score: overall rhyme quality (0-1)
+    - label: rhyme classification
+    - syllables_matched: number of syllables that rhyme
+    - last_syllable_similarity: similarity of the last syllable specifically
+    """
+    syllables1 = split_into_syllables(ipa1)
+    syllables2 = split_into_syllables(ipa2)
+    
+    if not syllables1 or not syllables2:
+        return {
+            'final_score': 0.0,
+            'label': 'none',
+            'syllables_matched': 0,
+            'last_syllable_similarity': 0.0
+        }
+    
+    # Calculate last syllable similarity (most important)
+    last_syl1 = syllables1[-1]
+    last_syl2 = syllables2[-1]
+    last_syllable_sim = levenshtein_similarity(last_syl1, last_syl2)
+    
+    # Check if last syllables are identical
+    last_syllables_identical = last_syl1 == last_syl2
+    
+    # Count consecutive matching syllables from the end
+    # The last syllable always "participates" if there's any rhyme at all
+    syllables_matched = 0
+    min_syllables = min(len(syllables1), len(syllables2))
+    
+    # First, count the last syllable if it has decent similarity
+    if last_syllable_sim >= 0.5:
+        syllables_matched = 1
+    
+    # Then check previous syllables (only if last syllable is near-perfect)
+    # IMPORTANT: Only give multi-syllable bonus if the last syllable is very high quality
+    # This prevents inflating mediocre rhymes to perfect scores
+    if syllables_matched > 0 and last_syllable_sim >= 0.90:
+        for i in range(2, min_syllables + 1):
+            syl1 = syllables1[-i]
+            syl2 = syllables2[-i]
+            
+            if syl1 == syl2:
+                # Identical syllables count
+                syllables_matched += 1
+            else:
+                sim = levenshtein_similarity(syl1, syl2)
+                # For additional syllables, require very high similarity (90%+)
+                # This ensures we only give bonus for true multi-syllable rhymes
+                if sim >= 0.90:
+                    syllables_matched += 1
+                else:
+                    # Stop - this syllable doesn't match well enough
+                    break
+    
+    # Calculate bonus for multi-syllable rhymes
+    # Only give bonus if we have MORE than just the last syllable matching
+    # AND the last syllable itself is very high quality (checked above)
+    multi_syllable_bonus = 0.0
+    if syllables_matched > 1:
+        # Bonus: 0.08 for each additional matching syllable beyond the first
+        # Conservative bonus to prevent over-inflation
+        multi_syllable_bonus = 0.08 * (syllables_matched - 1)
+    
+    # Base score on last syllable similarity
+    base_score = last_syllable_sim
+    
+    # Add multi-syllable bonus (but cap at 1.0)
+    final_score = min(1.0, base_score + multi_syllable_bonus)
+    
+    # Determine label based on last syllable matching
+    label = get_rhyme_label_from_score(
+        last_syl1, last_syl2, last_syllable_sim, 
+        last_syllables_identical, syllables_matched
+    )
+    
+    return {
+        'final_score': final_score,
+        'label': label,
+        'syllables_matched': syllables_matched,
+        'last_syllable_similarity': last_syllable_sim
+    }
+
+
+def get_rhyme_label_from_score(tail1: List[str], tail2: List[str], 
+                                 similarity: float, identical: bool,
+                                 syllables_matched: int) -> str:
     """
     Classify rhyme type based on criteria.
+    Perfect: Only for truly exceptional rhymes (99%+ or identical)
+    Near-perfect: 90%+ similarity
+    Assonance: Same vowel sound, 70%+
+    Slant: 50%+
     """
-    if tail1 == tail2:
+    if identical:
         return "perfect"
     
-    # Extract nucleus (first vowel) from each tail
+    # Extract nucleus (vowel) from each tail
     nucleus1 = None
     nucleus2 = None
     for phone in tail1:
@@ -193,14 +327,26 @@ def get_rhyme_label(tail1: List[str], tail2: List[str], similarity: float) -> st
     
     same_nucleus = nucleus1 == nucleus2
     
-    if similarity >= 0.85 and same_nucleus:
+    # Perfect: Only for truly exceptional rhymes
+    # Multi-syllable rhymes with very high similarity (99%+)
+    if syllables_matched >= 2 and similarity >= 0.99:
+        return "perfect"
+    
+    # Near-perfect: High quality rhymes
+    if syllables_matched >= 2 and similarity >= 0.90:
         return "near-perfect"
-    elif same_nucleus and similarity >= 0.6:
+    elif similarity >= 0.93 and same_nucleus:
+        return "near-perfect"
+    
+    # Assonance: Same vowel, decent similarity
+    if same_nucleus and similarity >= 0.70:
         return "assonance"
-    elif similarity >= 0.5:
+    
+    # Slant: Moderate similarity
+    if similarity >= 0.50:
         return "slant"
-    else:
-        return "none"
+    
+    return "none"
 
 
 def find_rhymes(input_word: str, limit: int = 50, include_tenses: bool = False) -> List[Dict]:
@@ -238,7 +384,6 @@ def find_rhymes(input_word: str, limit: int = 50, include_tenses: bool = False) 
     if not query_ipa:
         return []
     
-    query_tail = extract_rhyme_tail(query_ipa)
     rhymes = []
     seen = set()  # Track (base_word, display_word) to avoid duplicates
     
@@ -261,18 +406,16 @@ def find_rhymes(input_word: str, limit: int = 50, include_tenses: bool = False) 
                 ipa_str = forms_ipa[idx]
                 
                 candidate_ipa = ipa_str.split()
-                candidate_tail = extract_rhyme_tail(candidate_ipa)
                 
-                similarity = levenshtein_similarity(query_tail, candidate_tail)
+                # Use multi-syllable scoring
+                rhyme_result = calculate_multi_syllable_rhyme_score(query_ipa, candidate_ipa)
                 
                 # Only include if there's some similarity
-                if similarity < 0.3:
+                if rhyme_result['final_score'] < 0.3:
                     continue
                 
-                label = get_rhyme_label(query_tail, candidate_tail, similarity)
-                
                 # Skip "none" category
-                if label == "none":
+                if rhyme_result['label'] == "none":
                     continue
                 
                 # Avoid duplicates
@@ -284,8 +427,9 @@ def find_rhymes(input_word: str, limit: int = 50, include_tenses: bool = False) 
                 rhyme_entry = {
                     'word': display_word,
                     'base_word': dict_word,
-                    'similarity': round(similarity, 3),
-                    'label': label,
+                    'similarity': round(rhyme_result['final_score'], 3),
+                    'label': rhyme_result['label'],
+                    'syllables_matched': rhyme_result['syllables_matched'],
                     'definition': (entry.get('d') or [''])[0] if entry.get('d') else '',
                     'part_of_speech': (entry.get('p') or [''])[0] if entry.get('p') else '',
                     'is_base_form': (idx == 0),
@@ -298,18 +442,16 @@ def find_rhymes(input_word: str, limit: int = 50, include_tenses: bool = False) 
                 ipa_str = forms_ipa[0]
                 
                 candidate_ipa = ipa_str.split()
-                candidate_tail = extract_rhyme_tail(candidate_ipa)
                 
-                similarity = levenshtein_similarity(query_tail, candidate_tail)
+                # Use multi-syllable scoring
+                rhyme_result = calculate_multi_syllable_rhyme_score(query_ipa, candidate_ipa)
                 
                 # Only include if there's some similarity
-                if similarity < 0.3:
+                if rhyme_result['final_score'] < 0.3:
                     continue
                 
-                label = get_rhyme_label(query_tail, candidate_tail, similarity)
-                
                 # Skip "none" category
-                if label == "none":
+                if rhyme_result['label'] == "none":
                     continue
                 
                 key = (dict_word, display_word)
@@ -320,17 +462,20 @@ def find_rhymes(input_word: str, limit: int = 50, include_tenses: bool = False) 
                 rhyme_entry = {
                     'word': display_word,
                     'base_word': dict_word,
-                    'similarity': round(similarity, 3),
-                    'label': label,
+                    'similarity': round(rhyme_result['final_score'], 3),
+                    'label': rhyme_result['label'],
+                    'syllables_matched': rhyme_result['syllables_matched'],
                     'definition': (entry.get('d') or [''])[0] if entry.get('d') else '',
                     'part_of_speech': (entry.get('p') or [''])[0] if entry.get('p') else '',
                     'is_base_form': True,
                 }
                 rhymes.append(rhyme_entry)
     
-    # Sort by label priority and similarity
+    # Sort primarily by similarity score, then by label as tiebreaker
+    # This ensures that a 95% match ranks higher than an 80% match,
+    # regardless of their label categories
     label_priority = {"perfect": 0, "near-perfect": 1, "assonance": 2, "slant": 3}
-    rhymes.sort(key=lambda x: (label_priority.get(x['label'], 4), -x['similarity']))
+    rhymes.sort(key=lambda x: (-x['similarity'], label_priority.get(x['label'], 4)))
     
     return rhymes[:limit]
 
