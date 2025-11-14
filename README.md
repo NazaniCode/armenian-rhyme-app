@@ -45,7 +45,7 @@ pip install Flask==2.3.0 Flask-CORS==4.0.0 Werkzeug==2.3.0
 
 ### 2. Prepare Dictionary
 
-Ensure `dictionary-hy.cleaned.jsonl` is in the project directory. Each line should be a JSON object with:
+Ensure `dictionary-hy.reordered.jsonl` is in the project directory. Each line should be a JSON object with:
 
 ```json
 {
@@ -215,7 +215,7 @@ armenian-rhyme-app/
 ├── index.html                       # Web interface (frontend)
 ├── requirements.txt                 # Python dependencies
 ├── README.md                        # This file
-├── dictionary-hy.cleaned.jsonl      # Armenian word dictionary
+├── dictionary-hy.reordered.jsonl      # Armenian word dictionary
 └── add_ipa.py                       # (Existing) IPA phonetization script
 ```
 

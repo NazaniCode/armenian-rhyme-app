@@ -35,10 +35,10 @@ echo OK Dependencies installed
 REM Check if dictionary exists
 echo.
 echo Checking dictionary file...
-if exist "dictionary-hy.cleaned.jsonl" (
-    echo OK dictionary-hy.cleaned.jsonl found
+if exist "dictionary-hy.reordered.jsonl" (
+    echo OK dictionary-hy.reordered.jsonl found
 ) else (
-    echo X dictionary-hy.cleaned.jsonl not found in current directory
+    echo X dictionary-hy.reordered.jsonl not found in current directory
     pause
     exit /b 1
 )
