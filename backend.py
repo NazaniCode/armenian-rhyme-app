@@ -599,7 +599,7 @@ def get_stats():
 if __name__ == '__main__':
     # Load dictionary
     try:
-        load_dictionary('dictionary-hy.reordered.jsonl')
+        load_dictionary('dictionary-hy-improved.jsonl')
         print(f"Loaded {len(dictionary)} words from dictionary")
         print(f"Indexed {len(form_to_entries)} total forms/tenses")
     except Exception as e:

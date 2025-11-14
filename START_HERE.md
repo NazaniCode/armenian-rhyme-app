@@ -117,7 +117,7 @@ Read these in order based on your needs:
 - **test_rhymes.py** - Test suite (300 lines) - **python test_rhymes.py**
 
 ### Data
-- **dictionary-hy.reordered.jsonl** - 18,831 Armenian words (required)
+- **dictionary-hy-improved.jsonl** - 18,831 Armenian words (required)
 
 ---
 
@@ -320,7 +320,7 @@ By exploring this project, you'll learn about:
 → Run: `pip install -r requirements.txt`
 
 ### Issue: "Dictionary not found"
-→ Verify `dictionary-hy.reordered.jsonl` exists in folder
+→ Verify `dictionary-hy-improved.jsonl` exists in folder
 
 ### Issue: "Port 5000 already in use"
 → Read **SETUP_GUIDE.md** → "Troubleshooting" → "Port already in use"

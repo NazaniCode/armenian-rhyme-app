@@ -77,7 +77,7 @@ Step 5: Search for rhymes!
    → Run: pip install -r requirements.txt
 
 ❌ "Dictionary file not found"
-   → Verify dictionary-hy.reordered.jsonl exists here
+   → Verify dictionary-hy-improved.jsonl exists here
    → Check file isn't named differently
 
 ❌ "Port 5000 already in use"
@@ -94,7 +94,7 @@ Step 5: Search for rhymes!
 
 ✓ app.py                     - Backend server
 ✓ index.html                 - Web interface
-✓ dictionary-hy.reordered.jsonl - Word database (MUST be here!)
+✓ dictionary-hy-improved.jsonl - Word database (MUST be here!)
 ✓ config.py                  - Settings
 ✓ requirements.txt           - Python packages needed
 
@@ -107,7 +107,7 @@ Test the algorithm:
 
 Use as Python library:
    from app import load_dictionary, find_rhymes
-   load_dictionary('dictionary-hy.reordered.jsonl')
+   load_dictionary('dictionary-hy-improved.jsonl')
    rhymes = find_rhymes('սեր', limit=10)
 
 Access API directly:

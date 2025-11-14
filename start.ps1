@@ -37,11 +37,11 @@ try {
 # Check if dictionary exists
 Write-Host ""
 Write-Host "Checking dictionary file..." -ForegroundColor Yellow
-if (Test-Path "dictionary-hy.reordered.jsonl") {
-    $fileSize = (Get-Item "dictionary-hy.reordered.jsonl").Length / 1MB
-    Write-Host "✓ dictionary-hy.reordered.jsonl found ($([math]::Round($fileSize, 2)) MB)" -ForegroundColor Green
+if (Test-Path "dictionary-hy-improved.jsonl") {
+    $fileSize = (Get-Item "dictionary-hy-improved.jsonl").Length / 1MB
+    Write-Host "✓ dictionary-hy-improved.jsonl found ($([math]::Round($fileSize, 2)) MB)" -ForegroundColor Green
 } else {
-    Write-Host "✗ dictionary-hy.reordered.jsonl not found in current directory" -ForegroundColor Red
+    Write-Host "✗ dictionary-hy-improved.jsonl not found in current directory" -ForegroundColor Red
     Read-Host "Press Enter to exit"
     exit 1
 }

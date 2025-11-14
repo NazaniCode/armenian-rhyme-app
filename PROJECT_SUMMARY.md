@@ -95,7 +95,7 @@ armenian-rhyme-app/
 │   └── config.py                ✅ Configuration
 │
 ├── Data
-│   ├── dictionary-hy.reordered.jsonl ✅ 18,831 Armenian words with IPA
+│   ├── dictionary-hy-improved.jsonl ✅ 18,831 Armenian words with IPA
 │   └── (other data files)
 │
 ├── Documentation
@@ -217,7 +217,7 @@ similarity = 1.0 - (distance / max_length)
 ```python
 from app import load_dictionary, find_rhymes
 
-load_dictionary('dictionary-hy.reordered.jsonl')
+load_dictionary('dictionary-hy-improved.jsonl')
 
 # Find 10 rhymes for 'սեր' (love)
 rhymes = find_rhymes('սեր', limit=10)
@@ -421,7 +421,7 @@ curl "http://localhost:5000/api/rhymes?word=սեր&limit=5"
 |-------|----------|
 | "Python not found" | Install Python from python.org |
 | "Flask not found" | Run `pip install -r requirements.txt` |
-| "Dictionary not found" | Verify `dictionary-hy.reordered.jsonl` exists |
+| "Dictionary not found" | Verify `dictionary-hy-improved.jsonl` exists |
 | "Port 5000 in use" | Change port in config.py or restart PC |
 | "No results found" | Use autocomplete to find valid words |
 | "Slow performance" | First run loads dictionary (~3 seconds) |

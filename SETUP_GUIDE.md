@@ -50,7 +50,7 @@ Then open `index.html` in your browser.
 
 - **Python 3.7+** ([Download here](https://www.python.org/downloads/))
 - **Modern web browser** (Chrome, Firefox, Safari, Edge)
-- The `dictionary-hy.reordered.jsonl` file (should already be in the folder)
+- The `dictionary-hy-improved.jsonl` file (should already be in the folder)
 
 ### Step 1: Verify Python Installation
 
@@ -89,18 +89,18 @@ Successfully installed Flask-2.3.0 Flask-CORS-4.0.0 Werkzeug-2.3.0
 
 ### Step 3: Verify Dictionary File
 
-Check that `dictionary-hy.reordered.jsonl` is in the project folder:
+Check that `dictionary-hy-improved.jsonl` is in the project folder:
 - File size: ~30-50 MB
 - Contains 18,831 Armenian words with IPA phonetic transcriptions
 
 **Windows:**
 ```powershell
-ls dictionary-hy.reordered.jsonl
+ls dictionary-hy-improved.jsonl
 ```
 
 **macOS/Linux:**
 ```bash
-ls -lh dictionary-hy.reordered.jsonl
+ls -lh dictionary-hy-improved.jsonl
 ```
 
 ---
@@ -131,7 +131,7 @@ python3 app.py
 
 You should see:
 ```
-Loading dictionary from dictionary-hy.reordered.jsonl
+Loading dictionary from dictionary-hy-improved.jsonl
 Successfully loaded 18831 words
 Starting Flask app on 127.0.0.1:5000
  * Running on http://127.0.0.1:5000
@@ -211,7 +211,7 @@ Create a test script `test_search.py`:
 ```python
 from app import load_dictionary, find_rhymes
 
-load_dictionary('dictionary-hy.reordered.jsonl')
+load_dictionary('dictionary-hy-improved.jsonl')
 
 # Search for rhymes
 word = 'գլուխ'  # Change this to any Armenian word
@@ -276,12 +276,12 @@ pip install Flask==2.3.0
 pip install Flask-CORS==4.0.0
 ```
 
-### Problem: "dictionary-hy.reordered.jsonl not found"
+### Problem: "dictionary-hy-improved.jsonl not found"
 
 **Solution:**
 - Verify the file is in the project directory:
   ```powershell
-  ls dictionary-hy.reordered.jsonl
+  ls dictionary-hy-improved.jsonl
   ```
 - Check the filename spelling matches exactly
 - File should be ~30-50 MB
@@ -403,7 +403,7 @@ armenian-rhyme-app/
 ├── start.ps1                   # PowerShell start script
 ├── README.md                   # Project documentation
 ├── SETUP_GUIDE.md             # This file
-├── dictionary-hy.reordered.jsonl # Armenian dictionary (18,831 words)
+├── dictionary-hy-improved.jsonl # Armenian dictionary (18,831 words)
 └── (other files)               # Data processing scripts
 ```
 
@@ -415,7 +415,7 @@ armenian-rhyme-app/
 | `backend.py` | Simpler backend alternative |
 | `index.html` | Web interface (open in browser) |
 | `config.py` | Settings and thresholds |
-| `dictionary-hy.reordered.jsonl` | Word database |
+| `dictionary-hy-improved.jsonl` | Word database |
 | `test_rhymes.py` | Test and demo script |
 
 ---
@@ -461,7 +461,7 @@ Test directly with Python:
 ```python
 from app import load_dictionary, find_rhymes
 
-load_dictionary('dictionary-hy.reordered.jsonl')
+load_dictionary('dictionary-hy-improved.jsonl')
 rhymes = find_rhymes('test_word', limit=5)
 print(rhymes)
 ```

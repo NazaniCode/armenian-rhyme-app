@@ -10,7 +10,7 @@ FLASK_PORT = 5000
 FLASK_DEBUG = True
 
 # Dictionary Configuration
-DICTIONARY_FILE = 'dictionary-hy.reordered.jsonl'
+DICTIONARY_FILE = 'dictionary-hy-improved.jsonl'
 
 # Rhyme Detection Thresholds
 RHYME_THRESHOLDS = {

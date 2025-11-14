@@ -79,7 +79,7 @@ def main():
     """Main function to run syllabification tests"""
     # Load dictionary
     print("Loading dictionary...")
-    load_dictionary('dictionary-hy.reordered.jsonl')
+    load_dictionary('dictionary-hy-improved.jsonl')
     print(f"✓ Loaded {len(backend.dictionary)} words\n")
     
     # Check if word provided as command line argument
