@@ -523,7 +523,7 @@ def get_rhyme_label_from_score(tail1: List[str], tail2: List[str],
     return "none"
 
 
-def find_rhymes(input_word: str, limit: int = 50, include_tenses: bool = False) -> List[Dict]:
+def find_rhymes(input_word: str, limit: int = 50, offset: int = 0, include_tenses: bool = False) -> Tuple[List[Dict], int]:
     """
     Find rhyming words for the given Armenian word or form.
     - If include_tenses=False: return only base words (first form of each entry)
@@ -677,7 +677,9 @@ def find_rhymes(input_word: str, limit: int = 50, include_tenses: bool = False) 
         rhyme.pop('_vowel_sequence_similarity', None)
         rhyme.pop('_length_diff', None)
     
-    return rhymes[:limit]
+    total_matches = len(rhymes)
+    paginated_rhymes = rhymes[offset:offset + limit]
+    return paginated_rhymes, total_matches
 
 
 @app.route('/api/rhymes', methods=['GET'])
@@ -685,13 +687,23 @@ def get_rhymes():
     """API endpoint to get rhymes for a word"""
     word = request.args.get('word', '').strip()
     limit = request.args.get('limit', 50, type=int)
+    offset = request.args.get('offset', 0, type=int)
     include_tenses = request.args.get('include_tenses', 'false').lower() == 'true'
     
     if not word:
         return jsonify({'error': 'Word parameter required'}), 400
     
-    rhymes = find_rhymes(word, limit, include_tenses)
-    return jsonify({'word': word, 'rhymes': rhymes, 'include_tenses': include_tenses})
+    rhymes, total = find_rhymes(word, limit, offset, include_tenses)
+    has_more = (offset + len(rhymes)) < total
+    return jsonify({
+        'word': word,
+        'rhymes': rhymes,
+        'include_tenses': include_tenses,
+        'limit': limit,
+        'offset': offset,
+        'total': total,
+        'has_more': has_more
+    })
 
 
 @app.route('/api/search', methods=['GET'])

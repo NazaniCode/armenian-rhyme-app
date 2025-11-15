@@ -137,6 +137,22 @@
             color: white;
         }
 
+        .loading-inline {
+            display: none;
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        .loading-inline .spinner {
+            border-color: rgba(102, 126, 234, 0.2);
+            border-top-color: #667eea;
+        }
+
+        .loading-inline p {
+            margin-top: 10px;
+        }
+
         .spinner {
             border: 3px solid rgba(255, 255, 255, 0.3);
             border-radius: 50%;
@@ -312,8 +328,8 @@
 <body>
     <div class="container">
         <header>
-            <h1>🎵 Armenian Rhyme Finder</h1>
-            <p class="subtitle">Բացեք մահճային հավերժ հնչերուն տկարները</p>
+            <h1>Hangavorum: Armenian Rhyme Finder</h1>
+            <p class="subtitle">Փնտրեք հանգավորվող բառեր</p>
         </header>
 
         <div class="search-section">
@@ -329,16 +345,6 @@
                     <div id="autocompleteList" class="autocomplete-list"></div>
                 </div>
 
-                <div class="input-group">
-                    <label for="limitInput">Արդյունքներ</label>
-                    <select id="limitInput">
-                        <option value="10">10</option>
-                        <option value="25" selected>25</option>
-                        <option value="50">50</option>
-                        <option value="100">100</option>
-                    </select>
-                </div>
-
                 <div class="input-group" style="display: flex; align-items: flex-end; gap: 10px;">
                     <label style="flex: 1; margin-bottom: 0;">
                         <input 
@@ -346,7 +352,7 @@
                             id="includeTenses" 
                             style="width: auto; margin-right: 8px; cursor: pointer;"
                         >
-                        Ներառել հակեր
+                        Ներառել խոնարհումները
                     </label>
                 </div>
 
@@ -367,6 +373,10 @@
                 <p class="result-count" id="resultCount"></p>
             </div>
             <div class="results-container" id="resultsContainer"></div>
+            <div class="loading-inline" id="loadingMore">
+                <div class="spinner"></div>
+                <p>Ավելացնում է արդյունքները...</p>
+            </div>
         </div>
 
         <div class="stats" id="stats"></div>
@@ -374,25 +384,42 @@
 
     <script>
         const API_URL = 'http://localhost:5000/api';
+        const PAGE_SIZE = 50;
 
         let debounceTimer;
+        let currentWord = '';
+        let includeTenses = false;
+        let offset = 0;
+        let hasMore = false;
+        let isLoading = false;
+        let rhymesCache = [];
+        let totalResults = 0;
 
-        // Load dictionary stats on page load
+        const wordInput = document.getElementById('wordInput');
+        const autocompleteList = document.getElementById('autocompleteList');
+        const includeTensesCheckbox = document.getElementById('includeTenses');
+        const searchBtn = document.getElementById('searchBtn');
+        const resultsSection = document.getElementById('resultsSection');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const resultCount = document.getElementById('resultCount');
+        const statsEl = document.getElementById('stats');
+        const loadingMore = document.getElementById('loadingMore');
+        const loading = document.getElementById('loading');
+        const errorDiv = document.getElementById('error');
+
         document.addEventListener('DOMContentLoaded', async () => {
             try {
                 const response = await fetch(`${API_URL}/stats`);
                 const data = await response.json();
-                document.getElementById('stats').innerHTML = 
-                    `📚 Բառարան՝ ${data.total_words.toLocaleString()} բառ`;
+                if (statsEl) {
+                    statsEl.innerHTML = `📚 Բառարան՝ ${data.total_words.toLocaleString()} բառ`;
+                }
             } catch (e) {
                 console.error('Error loading stats:', e);
             }
         });
 
         // Autocomplete functionality
-        const wordInput = document.getElementById('wordInput');
-        const autocompleteList = document.getElementById('autocompleteList');
-
         wordInput.addEventListener('input', (e) => {
             clearTimeout(debounceTimer);
             const query = e.target.value.trim();
@@ -430,7 +457,6 @@
         }
 
         // Search functionality
-        const searchBtn = document.getElementById('searchBtn');
         wordInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 search();
@@ -441,46 +467,85 @@
 
         async function search() {
             const word = wordInput.value.trim();
-            const limit = document.getElementById('limitInput').value;
-            const includeTenses = document.getElementById('includeTenses').checked;
 
             if (!word) {
                 showError('Please enter a word');
                 return;
             }
 
-            showLoading(true);
+            includeTenses = includeTensesCheckbox.checked;
+            currentWord = word;
+            offset = 0;
+            hasMore = false;
+            rhymesCache = [];
+            totalResults = 0;
+            resultsSection.style.display = 'none';
+            toggleLoadingMore(false);
             hideError();
 
+            await fetchRhymes(true);
+        }
+
+        async function fetchRhymes(reset = false) {
+            if (isLoading || !currentWord) {
+                return;
+            }
+
+            isLoading = true;
+            if (reset) {
+                showLoading(true);
+            } else {
+                toggleLoadingMore(true);
+            }
+
             try {
-                const response = await fetch(
-                    `${API_URL}/rhymes?word=${encodeURIComponent(word)}&limit=${limit}&include_tenses=${includeTenses}`
-                );
+                const params = new URLSearchParams({
+                    word: currentWord,
+                    limit: PAGE_SIZE,
+                    offset: offset,
+                    include_tenses: includeTenses
+                });
+                const response = await fetch(`${API_URL}/rhymes?${params.toString()}`);
 
                 if (!response.ok) {
                     throw new Error('Network response was not ok');
                 }
 
                 const data = await response.json();
-                displayResults(data);
+                const newRhymes = data.rhymes || [];
+
+                totalResults = data.total ?? newRhymes.length;
+                hasMore = data.has_more !== undefined ? data.has_more : (rhymesCache.length + newRhymes.length < totalResults);
+                offset += newRhymes.length;
+
+                if (reset) {
+                    resultsContainer.innerHTML = '';
+                    rhymesCache = [...newRhymes];
+                } else {
+                    rhymesCache = rhymesCache.concat(newRhymes);
+                }
+
+                renderResults({
+                    rhymes: newRhymes,
+                    word: data.word,
+                    total: totalResults,
+                    append: !reset
+                });
             } catch (error) {
                 showError('Error searching for rhymes: ' + error.message);
             } finally {
-                showLoading(false);
+                if (reset) {
+                    showLoading(false);
+                } else {
+                    toggleLoadingMore(false);
+                }
+                isLoading = false;
             }
         }
 
-        function displayResults(data) {
-            const resultsSection = document.getElementById('resultsSection');
-            const resultsContainer = document.getElementById('resultsContainer');
-            const resultCount = document.getElementById('resultCount');
-
-            const word = data.word;
-            const rhymes = data.rhymes;
-
-            resultCount.textContent = `Found ${rhymes.length} rhymes for "${word}"`;
-
-            if (rhymes.length === 0) {
+        function renderResults({ rhymes, word, total, append }) {
+            if (!rhymesCache.length) {
+                resultCount.textContent = `No rhymes found for "${word}"`;
                 resultsContainer.innerHTML = `
                     <div class="empty-state">
                         <div class="empty-state-icon">🔍</div>
@@ -491,41 +556,84 @@
                 return;
             }
 
-            resultsContainer.innerHTML = rhymes.map(rhyme => {
-                const formIndicator = !rhyme.is_base_form ? ' <span style="color: #999; font-size: 0.85em;">(տ)</span>' : '';
-                return `
-                    <div class="rhyme-item">
-                        <div class="rhyme-word">
-                            ${rhyme.word}${formIndicator}
-                            ${rhyme.base_word && rhyme.word !== rhyme.base_word ? `<span style="color: #999; font-size: 0.85em; margin-left: 10px;">← ${rhyme.base_word}</span>` : ''}
-                        </div>
-                        <div class="rhyme-meta">
-                            <span class="badge ${rhyme.label}">${rhyme.label}</span>
-                            <span class="score">Similarity: ${(rhyme.similarity * 100).toFixed(1)}%</span>
-                            ${rhyme.syllables_matched > 1 ? `<span class="score" style="color: #28a745;">🎵 ${rhyme.syllables_matched} syllables</span>` : ''}
-                            <span class="pos">${rhyme.part_of_speech}</span>
-                        </div>
-                        <div class="definition">📖 ${rhyme.definition}</div>
-                    </div>
-                `;
-            }).join('');
+            const totalDisplay = total > 0 ? total.toLocaleString() : rhymesCache.length.toLocaleString();
+            resultCount.textContent = `Showing ${rhymesCache.length} of ${totalDisplay} rhymes for "${word}"`;
+
+            if (rhymes.length) {
+                const itemsHtml = rhymes.map(createRhymeMarkup).join('');
+                if (append) {
+                    resultsContainer.insertAdjacentHTML('beforeend', itemsHtml);
+                } else {
+                    resultsContainer.innerHTML = itemsHtml;
+                }
+            }
 
             resultsSection.style.display = 'block';
         }
 
+        function createRhymeMarkup(rhyme) {
+            const formIndicator = !rhyme.is_base_form ? ' <span style="color: #999; font-size: 0.85em;">(տ)</span>' : '';
+            const baseWord = rhyme.base_word && rhyme.word !== rhyme.base_word
+                ? `<span style="color: #999; font-size: 0.85em; margin-left: 10px;">← ${rhyme.base_word}</span>`
+                : '';
+            const syllableBadge = rhyme.syllables_matched > 1
+                ? `<span class="score" style="color: #28a745;">🎵 ${rhyme.syllables_matched} syllables</span>`
+                : '';
+
+            return `
+                <div class="rhyme-item">
+                    <div class="rhyme-word">
+                        ${rhyme.word}${formIndicator}
+                        ${baseWord}
+                    </div>
+                    <div class="rhyme-meta">
+                        <span class="badge ${rhyme.label}">${rhyme.label}</span>
+                        <span class="score">Similarity: ${(rhyme.similarity * 100).toFixed(1)}%</span>
+                        ${syllableBadge}
+                        <span class="pos">${rhyme.part_of_speech}</span>
+                    </div>
+                    <div class="definition">📖 ${rhyme.definition}</div>
+                </div>
+            `;
+        }
+
+        function handleInfiniteScroll() {
+            if (!hasMore || isLoading || !currentWord || resultsSection.style.display === 'none') {
+                return;
+            }
+
+            const scrolledToBottom = window.innerHeight + window.scrollY >= document.body.offsetHeight - 200;
+            if (scrolledToBottom) {
+                fetchRhymes(false);
+            }
+        }
+
+        function toggleLoadingMore(show) {
+            if (loadingMore) {
+                loadingMore.style.display = show ? 'block' : 'none';
+            }
+        }
+
         function showLoading(show) {
-            document.getElementById('loading').style.display = show ? 'block' : 'none';
+            if (loading) {
+                loading.style.display = show ? 'block' : 'none';
+            }
         }
 
         function showError(message) {
-            const errorDiv = document.getElementById('error');
-            errorDiv.textContent = message;
-            errorDiv.style.display = 'block';
+            if (errorDiv) {
+                errorDiv.textContent = message;
+                errorDiv.style.display = 'block';
+            }
         }
 
         function hideError() {
-            document.getElementById('error').style.display = 'none';
+            if (errorDiv) {
+                errorDiv.style.display = 'none';
+            }
         }
+
+        window.addEventListener('scroll', handleInfiniteScroll);
 
         // Close autocomplete when clicking outside
         document.addEventListener('click', (e) => {
