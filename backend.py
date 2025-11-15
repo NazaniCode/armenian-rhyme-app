@@ -269,6 +269,86 @@ def levenshtein_similarity(tail1: List[str], tail2: List[str], is_last_syllable:
     return max(0.0, min(1.0, similarity))
 
 
+def extract_vowel_sequence(syllables: List[List[str]]) -> List[str]:
+    """
+    Extract the vowel sequence from syllables (nucleus of each syllable).
+    This is critical for rhyme quality - words with matching vowel patterns sound similar.
+    
+    Args:
+        syllables: List of syllables (each syllable is a list of phones)
+    
+    Returns:
+        List of vowels (one per syllable)
+    """
+    vowels = []
+    for syllable in syllables:
+        # Find the first vowel in the syllable (the nucleus)
+        for phone in syllable:
+            if phone in VOWELS:
+                vowels.append(phone)
+                break
+    return vowels
+
+
+def calculate_vowel_sequence_similarity(vowels1: List[str], vowels2: List[str]) -> float:
+    """
+    Calculate similarity between two vowel sequences.
+    This captures the melodic quality of rhyme - words sound similar if vowel patterns match.
+    
+    Returns score from 0 to 1, where 1 is identical vowel sequence.
+    """
+    if not vowels1 or not vowels2:
+        return 0.0
+    
+    # Focus on the last 2-3 vowels (most important for rhyming)
+    # But consider the full sequence for multi-syllable words
+    max_vowels = max(len(vowels1), len(vowels2))
+    min_vowels = min(len(vowels1), len(vowels2))
+    
+    if max_vowels == 0:
+        return 0.0
+    
+    # Calculate weighted similarity, with more weight on final vowels
+    total_weight = 0.0
+    total_score = 0.0
+    
+    # Compare from the end (most important)
+    for i in range(1, min_vowels + 1):
+        v1 = vowels1[-i]
+        v2 = vowels2[-i]
+        
+        # Weight: last vowel = 3.0, second-to-last = 2.0, third-to-last = 1.5, rest = 1.0
+        if i == 1:
+            weight = 3.0
+        elif i == 2:
+            weight = 2.0
+        elif i == 3:
+            weight = 1.5
+        else:
+            weight = 1.0
+        
+        # Calculate phone similarity
+        if v1 == v2:
+            score = 1.0
+        else:
+            # Use phone_distance but invert it (0 distance = 1.0 similarity)
+            dist = phone_distance(v1, v2)
+            score = 1.0 - dist
+        
+        total_score += score * weight
+        total_weight += weight
+    
+    # Penalize length difference slightly
+    length_penalty = 1.0 - (abs(len(vowels1) - len(vowels2)) * 0.1)
+    length_penalty = max(0.5, length_penalty)  # Don't penalize too much
+    
+    if total_weight == 0:
+        return 0.0
+    
+    similarity = (total_score / total_weight) * length_penalty
+    return max(0.0, min(1.0, similarity))
+
+
 def calculate_multi_syllable_rhyme_score(ipa1: List[str], ipa2: List[str]) -> Dict:
     """
     Calculate comprehensive rhyme score considering all syllables.
@@ -277,6 +357,9 @@ def calculate_multi_syllable_rhyme_score(ipa1: List[str], ipa2: List[str]) -> Di
     - label: rhyme classification
     - syllables_matched: number of syllables that rhyme
     - last_syllable_similarity: similarity of the last syllable specifically
+    - penultimate_similarity: similarity of second-to-last syllable (for tiebreaking)
+    - vowel_sequence_similarity: similarity of vowel patterns (for tiebreaking)
+    - length_diff: absolute difference in total syllable count (for tiebreaking)
     """
     syllables1 = split_into_syllables(ipa1)
     syllables2 = split_into_syllables(ipa2)
@@ -286,7 +369,10 @@ def calculate_multi_syllable_rhyme_score(ipa1: List[str], ipa2: List[str]) -> Di
             'final_score': 0.0,
             'label': 'none',
             'syllables_matched': 0,
-            'last_syllable_similarity': 0.0
+            'last_syllable_similarity': 0.0,
+            'penultimate_similarity': 0.0,
+            'vowel_sequence_similarity': 0.0,
+            'length_diff': 0
         }
     
     # Calculate last syllable similarity (most important)
@@ -294,6 +380,22 @@ def calculate_multi_syllable_rhyme_score(ipa1: List[str], ipa2: List[str]) -> Di
     last_syl1 = syllables1[-1]
     last_syl2 = syllables2[-1]
     last_syllable_sim = levenshtein_similarity(last_syl1, last_syl2, is_last_syllable=True)
+    
+    # Calculate penultimate syllable similarity (for tiebreaking when last syllables match)
+    penultimate_sim = 0.0
+    if len(syllables1) >= 2 and len(syllables2) >= 2:
+        penult_syl1 = syllables1[-2]
+        penult_syl2 = syllables2[-2]
+        penultimate_sim = levenshtein_similarity(penult_syl1, penult_syl2, is_last_syllable=False)
+    
+    # Calculate vowel sequence similarity (CRITICAL for rhyme quality)
+    # Words with matching vowel patterns sound more similar, even if consonants differ
+    vowels1 = extract_vowel_sequence(syllables1)
+    vowels2 = extract_vowel_sequence(syllables2)
+    vowel_seq_sim = calculate_vowel_sequence_similarity(vowels1, vowels2)
+    
+    # Calculate length difference (prefer similar length words)
+    length_diff = abs(len(syllables1) - len(syllables2))
     
     # Check if last syllables are identical
     last_syllables_identical = last_syl1 == last_syl2
@@ -343,6 +445,18 @@ def calculate_multi_syllable_rhyme_score(ipa1: List[str], ipa2: List[str]) -> Di
     # Add multi-syllable bonus (but cap at 1.0)
     final_score = min(1.0, base_score + multi_syllable_bonus)
     
+    # IMPORTANT: Incorporate vowel sequence similarity into final score
+    # This ensures words with matching vowel patterns rank higher
+    # Weight vowel sequence more heavily when base score is high (85%+)
+    # This handles cases like:
+    #   - "f ə r a l" (ֆռալ) vs "ɡ ə n a l" (գնալ): vowels match perfectly (ə,a)
+    #   - "d a r ə n a l" (դառնալ) vs "ɡ ə n a l" (գնալ): vowels don't match as well (a,ə,a)
+    if base_score >= 0.85:
+        # For high-quality rhymes, blend in vowel sequence similarity
+        # This allows vowel-matched rhymes to rank above consonant-only matches
+        vowel_weight = 0.15  # 15% contribution from vowel sequence
+        final_score = min(1.0, final_score * (1 - vowel_weight) + vowel_seq_sim * vowel_weight)
+    
     # Determine label based on last syllable matching
     label = get_rhyme_label_from_score(
         last_syl1, last_syl2, last_syllable_sim, 
@@ -353,7 +467,10 @@ def calculate_multi_syllable_rhyme_score(ipa1: List[str], ipa2: List[str]) -> Di
         'final_score': final_score,
         'label': label,
         'syllables_matched': syllables_matched,
-        'last_syllable_similarity': last_syllable_sim
+        'last_syllable_similarity': last_syllable_sim,
+        'penultimate_similarity': penultimate_sim,
+        'vowel_sequence_similarity': vowel_seq_sim,
+        'length_diff': length_diff
     }
 
 
@@ -490,6 +607,10 @@ def find_rhymes(input_word: str, limit: int = 50, include_tenses: bool = False) 
                     'definition': (entry.get('d') or [''])[0] if entry.get('d') else '',
                     'part_of_speech': (entry.get('p') or [''])[0] if entry.get('p') else '',
                     'is_base_form': (idx == 0),
+                    # Store tiebreaker metrics (not shown to user, used for sorting)
+                    '_penultimate_similarity': rhyme_result['penultimate_similarity'],
+                    '_vowel_sequence_similarity': rhyme_result['vowel_sequence_similarity'],
+                    '_length_diff': rhyme_result['length_diff'],
                 }
                 rhymes.append(rhyme_entry)
         else:
@@ -525,14 +646,36 @@ def find_rhymes(input_word: str, limit: int = 50, include_tenses: bool = False) 
                     'definition': (entry.get('d') or [''])[0] if entry.get('d') else '',
                     'part_of_speech': (entry.get('p') or [''])[0] if entry.get('p') else '',
                     'is_base_form': True,
+                    # Store tiebreaker metrics (not shown to user, used for sorting)
+                    '_penultimate_similarity': rhyme_result['penultimate_similarity'],
+                    '_vowel_sequence_similarity': rhyme_result['vowel_sequence_similarity'],
+                    '_length_diff': rhyme_result['length_diff'],
                 }
                 rhymes.append(rhyme_entry)
     
-    # Sort primarily by similarity score, then by label as tiebreaker
-    # This ensures that a 95% match ranks higher than an 80% match,
-    # regardless of their label categories
+    # Sort with multiple tiebreakers:
+    # 1. Primary: similarity score (higher is better)
+    # 2. Tiebreaker 1: vowel sequence similarity (CRITICAL - higher is better)
+    # 3. Tiebreaker 2: penultimate syllable similarity (higher is better)
+    # 4. Tiebreaker 3: length difference (smaller is better - prefer similar length words)
+    # 5. Tiebreaker 4: label priority
+    # This ensures that when last syllables match, words with similar vowel patterns rank higher
+    # Example: "ɡ ə ɹ a v e l" ranks higher with "k ə ɹ a k e l" (vowels: ə,a,e match)
+    #          than with "a kʰ ə s o r v e l" (vowels: a,ə,o,e don't match as well)
     label_priority = {"perfect": 0, "near-perfect": 1, "assonance": 2, "slant": 3}
-    rhymes.sort(key=lambda x: (-x['similarity'], label_priority.get(x['label'], 4)))
+    rhymes.sort(key=lambda x: (
+        -x['similarity'],                                    # Primary: highest similarity first
+        -x.get('_vowel_sequence_similarity', 0),             # Tiebreaker 1: vowel pattern match (MOST IMPORTANT)
+        -x.get('_penultimate_similarity', 0),                # Tiebreaker 2: earlier syllable match
+        x.get('_length_diff', 999),                          # Tiebreaker 3: prefer similar length
+        label_priority.get(x['label'], 4)                    # Tiebreaker 4: label priority
+    ))
+    
+    # Remove internal tiebreaker fields before returning
+    for rhyme in rhymes:
+        rhyme.pop('_penultimate_similarity', None)
+        rhyme.pop('_vowel_sequence_similarity', None)
+        rhyme.pop('_length_diff', None)
     
     return rhymes[:limit]
 
