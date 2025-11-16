@@ -831,11 +831,13 @@
                 }
             }
 
-            // Search functionality
             wordInput.addEventListener("keydown", (e) => {
                 if (e.key === "Enter") {
                     e.preventDefault();
+
+                    autocompleteList.innerHTML = "";
                     finalizeInput();
+
                     search();
                 }
             });
