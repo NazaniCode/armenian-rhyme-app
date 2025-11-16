@@ -311,12 +311,46 @@
                 border: 1px solid rgba(255, 255, 255, 0.7);
                 backdrop-filter: blur(16px);
                 box-shadow: 0 35px 80px rgba(124, 110, 255, 0.18);
+                display: flex;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
             }
 
             .result-count {
                 color: #6b6b90;
                 font-size: 1.05rem;
-                margin-top: 6px;
+                margin-top: 0;
+            }
+
+            .filter-group {
+                display: flex;
+                gap: 14px;
+                flex-wrap: wrap;
+                margin-top: 4px;
+            }
+
+            .filter-button {
+                border: none;
+                padding: 10px 22px;
+                border-radius: 999px;
+                background: rgba(255, 255, 255, 0.8);
+                box-shadow: 0 12px 25px rgba(124, 110, 255, 0.15);
+                color: #494b7d;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.2s ease;
+            }
+
+            .filter-button:hover {
+                transform: translateY(-1px);
+                box-shadow: 0 16px 30px rgba(124, 110, 255, 0.2);
+            }
+
+            .filter-button.active {
+                background: linear-gradient(135deg, #3f6df5, #a248ff);
+                color: #ffffff;
+                box-shadow: 0 20px 35px rgba(79, 104, 255, 0.35);
             }
 
             .results-container {
@@ -563,6 +597,50 @@
                 <div class="results-header">
                     <h2>Արդյունքներ</h2>
                     <p class="result-count" id="resultCount"></p>
+                    <div class="filter-group" id="posFilters">
+                        <button
+                            type="button"
+                            class="filter-button"
+                            data-filter="noun"
+                        >
+                            Noun
+                        </button>
+                        <button
+                            type="button"
+                            class="filter-button"
+                            data-filter="verb"
+                        >
+                            Verb
+                        </button>
+                        <button
+                            type="button"
+                            class="filter-button"
+                            data-filter="adjective"
+                        >
+                            Adjective
+                        </button>
+                        <button
+                            type="button"
+                            class="filter-button"
+                            data-filter="adverb"
+                        >
+                            Adverb
+                        </button>
+                        <button
+                            type="button"
+                            class="filter-button"
+                            data-filter="name"
+                        >
+                            Name
+                        </button>
+                        <button
+                            type="button"
+                            class="filter-button"
+                            data-filter="pronoun"
+                        >
+                            Pronoun
+                        </button>
+                    </div>
                 </div>
                 <div class="results-container" id="resultsContainer"></div>
                 <div class="loading-inline" id="loadingMore">
@@ -584,10 +662,15 @@
             let offset = 0;
             let hasMore = false;
             let isLoading = false;
+
             let rhymesCache = [];
+
             let totalResults = 0;
 
+            let renderedRhymesCount = 0;
+
             const wordInput = document.getElementById("wordInput");
+
             const autocompleteList =
                 document.getElementById("autocompleteList");
             const includeTensesCheckbox =
@@ -601,6 +684,60 @@
             const loadingMore = document.getElementById("loadingMore");
             const loading = document.getElementById("loading");
             const errorDiv = document.getElementById("error");
+            const posFilterButtons =
+                document.querySelectorAll(".filter-button");
+            const FILTER_LABELS = {
+                noun: "Noun",
+                verb: "Verb",
+                adjective: "Adjective",
+                adverb: "Adverb",
+                name: "Name",
+                pronoun: "Pronoun",
+            };
+            const FILTER_MAP = {
+                noun: ["noun", "common noun"],
+                verb: ["verb"],
+                adjective: ["adjective"],
+                adverb: ["adverb"],
+                name: ["proper noun", "name", "given name", "surname"],
+                pronoun: ["pronoun"],
+            };
+            const POS_ALIAS_MAP = {
+                n: "noun",
+                noun: "noun",
+                nouns: "noun",
+                nominal: "noun",
+                v: "verb",
+                vb: "verb",
+                verb: "verb",
+                verbs: "verb",
+                adj: "adjective",
+                adjective: "adjective",
+                adjectives: "adjective",
+                adv: "adverb",
+                adverb: "adverb",
+                adverbs: "adverb",
+                pron: "pronoun",
+                pronoun: "pronoun",
+                pronouns: "pronoun",
+                name: "name",
+                names: "name",
+                proper: "proper noun",
+                "proper noun": "proper noun",
+                "proper nouns": "proper noun",
+                "common noun": "common noun",
+                "common nouns": "common noun",
+                "given name": "given name",
+                "given names": "given name",
+                surname: "surname",
+            };
+            const POS_MULTIWORD_PATTERNS = [
+                { pattern: /\bproper\s+nouns?\b/g, replacement: "proper noun" },
+                { pattern: /\bcommon\s+nouns?\b/g, replacement: "common noun" },
+                { pattern: /\bgiven\s+name\b/g, replacement: "given name" },
+                { pattern: /\bsur\s*name\b/g, replacement: "surname" },
+            ];
+            let activePosFilter = null;
 
             document.addEventListener("DOMContentLoaded", async () => {
                 try {
@@ -613,6 +750,28 @@
                     console.error("Error loading stats:", e);
                 }
             });
+
+            posFilterButtons.forEach((button) => {
+                button.addEventListener("click", () => {
+                    const { filter } = button.dataset;
+                    activePosFilter =
+                        activePosFilter === filter ? null : filter;
+                    updateFilterButtons();
+                    if (!currentWord || rhymesCache.length === 0) {
+                        return;
+                    }
+
+                    renderResults({
+                        word: currentWord,
+
+                        total: totalResults || rhymesCache.length,
+
+                        forceRefresh: true,
+                    });
+                });
+            });
+
+            updateFilterButtons();
 
             // Autocomplete functionality
             wordInput.addEventListener("input", (e) => {
@@ -679,6 +838,7 @@
                 offset = 0;
                 hasMore = false;
                 rhymesCache = [];
+                renderedRhymesCount = 0;
                 totalResults = 0;
                 resultsSection.style.display = "none";
                 toggleLoadingMore(false);
@@ -715,7 +875,9 @@
                     }
 
                     const data = await response.json();
-                    const newRhymes = data.rhymes || [];
+                    const newRhymes = (data.rhymes || []).map(
+                        enhanceRhymeEntry,
+                    );
 
                     totalResults = data.total ?? newRhymes.length;
                     hasMore =
@@ -733,10 +895,11 @@
                     }
 
                     renderResults({
-                        rhymes: newRhymes,
                         word: data.word,
+
                         total: totalResults,
-                        append: !reset,
+
+                        reset,
                     });
                 } catch (error) {
                     showError("Error searching for rhymes: " + error.message);
@@ -750,37 +913,203 @@
                 }
             }
 
-            function renderResults({ rhymes, word, total, append }) {
+            function updateFilterButtons() {
+                posFilterButtons.forEach((button) => {
+                    button.classList.toggle(
+                        "active",
+                        button.dataset.filter === activePosFilter,
+                    );
+                });
+            }
+
+            function getFilteredRhymes() {
+                if (!activePosFilter) {
+                    return [...rhymesCache];
+                }
+
+                return rhymesCache.filter((rhyme) => {
+                    const normalizedPos =
+                        rhyme.normalized_part_of_speech ??
+                        normalizePartOfSpeech(rhyme.part_of_speech);
+                    rhyme.normalized_part_of_speech = normalizedPos;
+                    return matchesFilter(normalizedPos, activePosFilter);
+                });
+            }
+
+            function normalizePartOfSpeech(partOfSpeech) {
+                if (!partOfSpeech) {
+                    return "";
+                }
+
+                let normalized = partOfSpeech
+                    .normalize("NFKD")
+                    .toLowerCase()
+                    .replace(/[\u0300-\u036f]/g, "")
+                    .replace(/[_•·]/g, " ")
+                    .replace(/[\u2013\u2014]/g, " ")
+                    .replace(/-/g, " ")
+                    .replace(/\./g, " ")
+                    .replace(/&/g, " and ")
+                    .replace(/\s+/g, " ")
+                    .trim();
+
+                if (!normalized) {
+                    return "";
+                }
+
+                const tags = new Set();
+
+                POS_MULTIWORD_PATTERNS.forEach(({ pattern, replacement }) => {
+                    const matches = normalized.match(pattern);
+                    if (matches) {
+                        tags.add(replacement);
+                        normalized = normalized.replace(pattern, " ");
+                    }
+                });
+
+                normalized = normalized.replace(/\s+/g, " ").trim();
+
+                if (normalized) {
+                    normalized
+                        .split(/[\s,;:/()]+/)
+                        .map((token) => POS_ALIAS_MAP[token] || token)
+                        .filter((token) => token && token !== "and")
+                        .forEach((token) => tags.add(token));
+                }
+
+                return Array.from(tags).join(" ");
+            }
+
+            function matchesFilter(normalizedPos, filterKey) {
+                if (!normalizedPos) {
+                    return false;
+                }
+
+                if (
+                    filterKey === "noun" &&
+                    hasTag(normalizedPos, "proper noun")
+                ) {
+                    return false;
+                }
+
+                return FILTER_MAP[filterKey].some((tag) =>
+                    hasTag(normalizedPos, tag),
+                );
+            }
+
+            function hasTag(normalized, tag) {
+                const pattern = new RegExp(
+                    `(^|[\\s,;:/\\-()])${escapeRegExp(tag)}(?=$|[\\s,;:/\\-()])`,
+                );
+                return pattern.test(normalized);
+            }
+
+            function escapeRegExp(value) {
+                return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            }
+
+            function enhanceRhymeEntry(rhyme) {
+                return {
+                    ...rhyme,
+                    normalized_part_of_speech: normalizePartOfSpeech(
+                        rhyme.part_of_speech,
+                    ),
+                };
+            }
+
+            function renderResults({
+                word,
+                total,
+                reset = false,
+                forceRefresh = false,
+            }) {
                 if (!rhymesCache.length) {
                     resultCount.textContent = `No rhymes found for "${word}"`;
+
                     resultsContainer.innerHTML = `
+
                     <div class="empty-state">
+
                         <div class="empty-state-icon">🔍</div>
+
                         <p>No rhymes found for "${word}"</p>
+
                     </div>
+
                 `;
+
                     resultsSection.style.display = "block";
+
+                    renderedRhymesCount = 0;
                     return;
                 }
 
-                const totalDisplay =
-                    total > 0
-                        ? total.toLocaleString()
-                        : rhymesCache.length.toLocaleString();
-                resultCount.textContent = `Showing ${rhymesCache.length} of ${totalDisplay} rhymes for "${word}"`;
+                if (reset || forceRefresh) {
+                    resultsContainer.innerHTML = "";
+                    renderedRhymesCount = 0;
+                }
 
-                if (rhymes.length) {
-                    const itemsHtml = rhymes.map(createRhymeMarkup).join("");
-                    if (append) {
+                const filteredRhymes = getFilteredRhymes();
+
+                if (!filteredRhymes.length) {
+                    const filterLabel =
+                        FILTER_LABELS[activePosFilter] || "selected";
+                    const filterLabelLower = filterLabel.toLowerCase();
+                    resultCount.textContent = `No ${filterLabelLower} rhymes found for "${word}"`;
+                    resultsContainer.innerHTML = `
+                    <div class="empty-state">
+
+                        <div class="empty-state-icon">🔍</div>
+
+                        <p>No ${filterLabelLower} rhymes found for "${word}"</p>
+
+                    </div>
+
+                `;
+
+                    resultsSection.style.display = "block";
+
+                    renderedRhymesCount = 0;
+                    return;
+                }
+
+                const overallTotalCount =
+                    total && total > 0 ? total : rhymesCache.length;
+
+                const filteredTotalCount = filteredRhymes.length;
+
+                const filterSuffix = activePosFilter
+                    ? ` (${FILTER_LABELS[activePosFilter]})`
+                    : "";
+
+                const filterDetails = activePosFilter
+                    ? ` • Filtered total: ${filteredTotalCount.toLocaleString()}`
+                    : "";
+
+                resultCount.textContent = `Showing ${filteredRhymes.length.toLocaleString()} of ${overallTotalCount.toLocaleString()} rhymes for "${word}"${filterSuffix}${filterDetails}`;
+
+                const itemsToRender =
+                    reset || forceRefresh
+                        ? filteredRhymes
+                        : filteredRhymes.slice(renderedRhymesCount);
+
+                if (itemsToRender.length) {
+                    const itemsHtml = itemsToRender
+                        .map(createRhymeMarkup)
+
+                        .join("");
+
+                    if (reset || forceRefresh) {
+                        resultsContainer.innerHTML = itemsHtml;
+                    } else {
                         resultsContainer.insertAdjacentHTML(
                             "beforeend",
                             itemsHtml,
                         );
-                    } else {
-                        resultsContainer.innerHTML = itemsHtml;
                     }
                 }
 
+                renderedRhymesCount = filteredRhymes.length;
                 resultsSection.style.display = "block";
             }
 
