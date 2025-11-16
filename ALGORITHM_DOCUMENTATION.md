@@ -10,15 +10,28 @@ This document explains the core logic and algorithms used in the Armenian Rhyme 
 2. **index.html** - Frontend web interface
 3. **dictionary-hy.cleaned.jsonl** - Armenian dictionary with IPA transcriptions
 
-### Data Structure
+
 The dictionary is stored in JSONL format where each line contains:
+
 ```json
+
 {
+
   "": "base_word",           // Base form (lemma)
+
   "f": ["form1", "form2"],   // Inflected forms/tenses
+
   "f_ipa": ["ipa1", "ipa2"]  // IPA transcriptions for each form
+
 }
+
 ```
+
+### Deployment and Logging Notes
+- The production environment runs on [Railway](https://railway.app) as a single Flask service behind Gunicorn. The service serves both the static `index.html` frontend and the `/api/*` routes, so the browser can rely on relative paths (for example, `/api/rhymes`).
+- The backend loads `dictionary-hy-improved.jsonl` on startup. A startup log line reports the total number of entries loaded (e.g., `Loaded 18 830 dictionary entries`), and a warning is issued if the file cannot be found so operators can diagnose empty-result scenarios quickly.
+- The dictionary path can be overridden with the `DICTIONARY_FILE` environment variable in Railway. This makes it easy to swap in alternative dictionaries or point to an object-storage URL without modifying code.
+
 
 ## Core Algorithm: Multi-Syllable Rhyme Detection
 
