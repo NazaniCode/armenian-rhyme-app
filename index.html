@@ -813,17 +813,37 @@
             function selectWord(word) {
                 wordInput.value = word;
                 autocompleteList.innerHTML = "";
+                finalizeInput();
                 search();
             }
 
+            function finalizeInput() {
+                if (typeof wordInput.blur === "function") {
+                    wordInput.blur();
+                }
+                const activeElement = document.activeElement;
+                if (
+                    activeElement &&
+                    activeElement !== wordInput &&
+                    typeof activeElement.blur === "function"
+                ) {
+                    activeElement.blur();
+                }
+            }
+
             // Search functionality
-            wordInput.addEventListener("keypress", (e) => {
+            wordInput.addEventListener("keydown", (e) => {
                 if (e.key === "Enter") {
+                    e.preventDefault();
+                    finalizeInput();
                     search();
                 }
             });
 
-            searchBtn.addEventListener("click", search);
+            searchBtn.addEventListener("click", () => {
+                finalizeInput();
+                search();
+            });
 
             async function search() {
                 const word = wordInput.value.trim();

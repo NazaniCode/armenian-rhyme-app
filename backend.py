@@ -81,13 +81,15 @@ VOWEL_FEATURES = {
 # Global dictionaries
 dictionary = {}  # Main dictionary: base_word -> entry
 form_to_entries = {}  # Maps any form to list of (base_word, form_index)
+normalized_form_to_entries = {}  # Case-insensitive lookup for forms and base words
 
 
 def load_dictionary(filepath: str):
     """Load JSONL dictionary into memory"""
-    global dictionary, form_to_entries
+    global dictionary, form_to_entries, normalized_form_to_entries
     dictionary = {}
     form_to_entries = {}
+    normalized_form_to_entries = {}
 
     candidate_paths = [
         filepath,
@@ -107,6 +109,18 @@ def load_dictionary(filepath: str):
         return
 
     try:
+
+        def add_case_mapping(term: str, base_word: str, idx: int):
+            if not term:
+                return
+
+            normalized_key = term.casefold()
+
+            entries = normalized_form_to_entries.setdefault(normalized_key, [])
+
+            if (base_word, idx) not in entries:
+                entries.append((base_word, idx))
+
         with open(file_to_open, "r", encoding="utf-8") as f:
             for raw_line in f:
                 line = raw_line.strip()
@@ -120,6 +134,8 @@ def load_dictionary(filepath: str):
 
                 dictionary[word] = entry
 
+                add_case_mapping(word, word, 0)
+
                 forms = entry.get("f", [])
                 forms_ipa = entry.get("f_ipa", [])
 
@@ -128,10 +144,24 @@ def load_dictionary(filepath: str):
                         if form not in form_to_entries:
                             form_to_entries[form] = []
                         form_to_entries[form].append((word, idx))
+                        add_case_mapping(form, word, idx)
+
+        entry_count = len(dictionary)
+        form_link_count = sum(len(values) for values in form_to_entries.values())
+        casefold_link_count = sum(
+            len(values) for values in normalized_form_to_entries.values()
+        )
+        logging.info(
+            "Loaded %d dictionary entries (%d forms indexed, %d case-insensitive mappings)",
+            entry_count,
+            form_link_count,
+            casefold_link_count,
+        )
     except Exception as exc:
         logging.error("Failed to load dictionary file '%s': %s", file_to_open, exc)
         dictionary = {}
         form_to_entries = {}
+        normalized_form_to_entries = {}
 
 
 default_dictionary_path = os.environ.get("DICTIONARY_FILE", DICTIONARY_FILE)
@@ -617,15 +647,22 @@ def find_rhymes(
     # Find which dictionary entries match the input (could be base word or a form)
     query_entries = []
 
+    normalized_input = input_word.casefold()
+
     if input_word in dictionary:
         # Direct match - it's a base word
         query_entries = [(input_word, 0)]  # (base_word, form_index)
     elif input_word in form_to_entries:
         # It's a form of some word(s)
         query_entries = form_to_entries[input_word]
+    elif normalized_input in normalized_form_to_entries:
+        # Case-insensitive match against base words or forms
+        query_entries = normalized_form_to_entries[normalized_input]
     else:
         # No match
         return [], 0
+
+    matched_base_words = {base_word for base_word, _ in query_entries}
 
     # Get IPA for the query word (use first form if it's a base word, or the matched form)
     query_ipa = None
@@ -645,7 +682,7 @@ def find_rhymes(
     # Search through all words
     for dict_word, entry in dictionary.items():
         # Skip the query word itself
-        if dict_word == input_word:
+        if dict_word in matched_base_words:
             continue
 
         forms = entry.get("f", [])
