@@ -4,6 +4,10 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>Armenian Rhyme Finder</title>
+        <script
+            src="https://kit.fontawesome.com/7cb58db835.js"
+            crossorigin="anonymous"
+        ></script>
         <link
             rel="stylesheet"
             href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
@@ -99,7 +103,7 @@
                 gap: 20px;
                 position: relative;
                 overflow: visible;
-                z-index: 0;
+                z-index: 20;
             }
 
             .search-section::before {
@@ -128,7 +132,7 @@
             }
 
             .input-group label {
-                font-weight: 600;
+                font-weight: 400;
                 color: #45456b;
             }
 
@@ -197,7 +201,7 @@
                 overflow-y: auto;
                 box-shadow: 0 24px 48px rgba(105, 103, 255, 0.18);
                 backdrop-filter: blur(14px);
-                z-index: 100;
+                z-index: 1000000;
             }
 
             .autocomplete-item {
@@ -515,7 +519,7 @@
             <div class="search-section">
                 <div class="search-container">
                     <div class="input-group">
-                        <label for="wordInput">Մուտքագրեք բառ</label>
+                        <label for="wordInput">Փնտրեք հանգավորվող բառեր</label>
                         <input
                             type="text"
                             id="wordInput"
@@ -532,7 +536,7 @@
                         <label class="toggle">
                             <input type="checkbox" id="includeTenses" />
                             <span class="toggle-label"
-                                >Ներառել խոնարհումները</span
+                                >Ներառել խոնարհումներ</span
                             >
                         </label>
                     </div>
