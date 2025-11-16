@@ -4,6 +4,8 @@ Implements phoneme-based rhyme detection with similarity scoring
 """
 
 import json
+import logging
+import os
 import re
 from collections import defaultdict
 from typing import Dict, List, Tuple
@@ -11,7 +13,10 @@ from typing import Dict, List, Tuple
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 
+from config import DICTIONARY_FILE
+
 app = Flask(__name__)
+logging.basicConfig(level=logging.INFO)
 CORS(app)
 
 
@@ -84,14 +89,37 @@ def load_dictionary(filepath: str):
     dictionary = {}
     form_to_entries = {}
 
-    with open(filepath, "r", encoding="utf-8") as f:
-        for line in f:
-            entry = json.loads(line.strip())
-            word = entry.get("", "")
-            if word:
+    candidate_paths = [
+        filepath,
+        os.path.join(os.getcwd(), filepath),
+        os.path.join(os.path.dirname(__file__), filepath),
+    ]
+
+    file_to_open = next(
+        (path for path in candidate_paths if path and os.path.exists(path)), None
+    )
+
+    if not file_to_open:
+        logging.warning(
+            "Dictionary file '%s' not found. Running with empty dictionary.",
+            filepath,
+        )
+        return
+
+    try:
+        with open(file_to_open, "r", encoding="utf-8") as f:
+            for raw_line in f:
+                line = raw_line.strip()
+                if not line:
+                    continue
+
+                entry = json.loads(line)
+                word = entry.get("", "")
+                if not word:
+                    continue
+
                 dictionary[word] = entry
 
-                # Map all forms to this entry
                 forms = entry.get("f", [])
                 forms_ipa = entry.get("f_ipa", [])
 
@@ -100,6 +128,14 @@ def load_dictionary(filepath: str):
                         if form not in form_to_entries:
                             form_to_entries[form] = []
                         form_to_entries[form].append((word, idx))
+    except Exception as exc:
+        logging.error("Failed to load dictionary file '%s': %s", file_to_open, exc)
+        dictionary = {}
+        form_to_entries = {}
+
+
+default_dictionary_path = os.environ.get("DICTIONARY_FILE", DICTIONARY_FILE)
+load_dictionary(default_dictionary_path)
 
 
 def split_into_syllables(ipa_phones: List[str]) -> List[List[str]]:
