@@ -589,7 +589,7 @@ def find_rhymes(
         query_entries = form_to_entries[input_word]
     else:
         # No match
-        return []
+        return [], 0
 
     # Get IPA for the query word (use first form if it's a base word, or the matched form)
     query_ipa = None
@@ -601,7 +601,7 @@ def find_rhymes(
             break
 
     if not query_ipa:
-        return []
+        return [], 0
 
     rhymes = []
     seen = set()  # Track (base_word, display_word) to avoid duplicates
