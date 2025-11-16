@@ -178,10 +178,18 @@ Classifies rhyme quality based on multiple criteria:
 5. Sort results by similarity (highest first)
 6. Return top N results
 
+
 **Sorting Priority:**
+
 Results are sorted purely by `final_score` in descending order. This means:
+
 - A 95% "near-perfect" rhyme ranks higher than an 85% "near-perfect" rhyme
+
 - Labels are informational but don't affect ranking
+
+**Frontend Filtering:**
+The results UI provides pill-style toggle buttons (Noun, Verb, Adjective, Adverb, Name, Pronoun) that filter the currently loaded rhymes by part of speech without issuing new API calls. Each rhyme’s part-of-speech tag is normalized client-side to handle aliases (for example, `adj`, `proper noun`, or `common noun`), and infinite scrolling honors the active filter so newly appended results remain consistent with the user’s selection.
+
 
 ## Key Design Decisions
 
