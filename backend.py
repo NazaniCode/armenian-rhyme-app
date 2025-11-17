@@ -1,35 +1,60 @@
 """
 Armenian Rhyme Finder - Backend
-Implements phoneme-based rhyme detection with similarity scoring
+Provides rhyme search APIs backed by either a compressed SQLite dictionary
+or a JSONL fallback.
 """
+
+from __future__ import annotations
 
 import json
 import logging
 import os
 import re
-from collections import defaultdict
+import sqlite3
+import zlib
 from functools import lru_cache
-from typing import Dict, List, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple
 
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 
-from config import DICTIONARY_FILE
+from config import AUTOCOMPLETE_LIMIT, DICTIONARY_FILE
+
+# ---------------------------------------------------------------------------
+# Flask application setup
+# ---------------------------------------------------------------------------
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 CORS(app)
 
+SQLITE_DB_FILE = os.environ.get("DICTIONARY_SQLITE_FILE", "dictionary-hy.db")
+
+# Global state
+db_connection: Optional[sqlite3.Connection] = None
+USE_SQLITE = False
+
+dictionary: Dict[str, dict] = {}
+form_to_entries: Dict[str, List[Tuple[str, int]]] = {}
+normalized_form_to_entries: Dict[str, List[Tuple[str, int]]] = {}
+
+# ---------------------------------------------------------------------------
+# Static file serving
+# ---------------------------------------------------------------------------
+
 
 @app.route("/")
 def home():
+    """Serve the single-page application."""
     return send_from_directory(".", "index.html")
 
 
+# ---------------------------------------------------------------------------
 # Phoneme feature definitions
+# ---------------------------------------------------------------------------
+
 VOWELS = {"a", "e", "i", "o", "u", "ə", "ɑ", "ɔ", "ʌ", "æ", "iː", "uː", "oː", "ɛ"}
 
-# Consonant features: (place, manner)
 CONSONANTS = {
     "p": ("labial", "stop"),
     "b": ("labial", "stop"),
@@ -61,7 +86,6 @@ CONSONANTS = {
     "tʃ": ("palatal", "stop"),
 }
 
-# Vowel features: (height, backness)
 VOWEL_FEATURES = {
     "i": ("close", "front"),
     "iː": ("close", "front"),
@@ -79,84 +103,174 @@ VOWEL_FEATURES = {
     "ɑ": ("open", "back"),
 }
 
-# Global dictionaries
-dictionary = {}  # Main dictionary: base_word -> entry
-form_to_entries = {}  # Maps any form to list of (base_word, form_index)
-normalized_form_to_entries = {}  # Case-insensitive lookup for forms and base words
+
+# ---------------------------------------------------------------------------
+# Dictionary loading helpers
+# ---------------------------------------------------------------------------
 
 
-def load_dictionary(filepath: str):
-    """Load JSONL dictionary into memory"""
+def get_db_connection() -> Optional[sqlite3.Connection]:
+    """Initialise and cache a SQLite connection if the database exists."""
+    global db_connection, USE_SQLITE
+
+    if db_connection is not None:
+        return db_connection
+
+    db_path = SQLITE_DB_FILE
+    if not db_path or not os.path.exists(db_path):
+        logging.info(
+            "SQLite dictionary '%s' not found; defaulting to JSONL dictionary.",
+            db_path,
+        )
+        USE_SQLITE = False
+        return None
+
+    try:
+        connection = sqlite3.connect(db_path, check_same_thread=False)
+        connection.row_factory = sqlite3.Row
+
+        # Ensure schema exists
+        required_tables = {"entries", "forms"}
+        existing = {
+            row["name"]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        }
+        if not required_tables.issubset(existing):
+            missing = ", ".join(sorted(required_tables - existing))
+            raise RuntimeError(f"missing required tables: {missing}")
+
+        connection.execute("SELECT 1 FROM entries LIMIT 1")
+
+        db_connection = connection
+        USE_SQLITE = True
+        logging.info("Using SQLite dictionary at %s", os.path.abspath(db_path))
+        return db_connection
+    except Exception as exc:
+        logging.warning(
+            "Failed to initialise SQLite dictionary '%s': %s. Falling back to JSON.",
+            db_path,
+            exc,
+        )
+        if "connection" in locals():
+            try:
+                connection.close()
+            except Exception:
+                pass
+        db_connection = None
+        USE_SQLITE = False
+        return None
+
+
+@lru_cache(maxsize=4096)
+def fetch_entry_from_sqlite(base_word: str) -> Optional[dict]:
+    """Retrieve and decompress a dictionary entry from SQLite."""
+    conn = get_db_connection()
+    if not conn:
+        return None
+
+    row = conn.execute(
+        "SELECT entry_blob FROM entries WHERE base_word = ?", (base_word,)
+    ).fetchone()
+    if not row:
+        return None
+
+    try:
+        data = zlib.decompress(row["entry_blob"])
+        return json.loads(data.decode("utf-8"))
+    except Exception as exc:
+        logging.error("Failed to decompress entry '%s': %s", base_word, exc)
+        return None
+
+
+def resolve_sqlite_forms(term: str) -> List[Tuple[str, int]]:
+    """Fetch base-word mappings for a form using SQLite."""
+    conn = get_db_connection()
+    if not conn:
+        return []
+
+    cursor = conn.execute(
+        "SELECT base_word, form_index FROM forms WHERE form = ? COLLATE NOCASE",
+        (term,),
+    )
+    return [(row["base_word"], row["form_index"]) for row in cursor]
+
+
+def iterate_dictionary_entries() -> Iterable[Tuple[str, dict]]:
+    """Yield (base_word, entry) pairs from the active dictionary backend."""
+    if USE_SQLITE:
+        conn = get_db_connection()
+        if not conn:
+            return  # No SQLite connection available; yield nothing
+        cursor = conn.execute("SELECT base_word, entry_blob FROM entries")
+        for row in cursor:
+            try:
+                entry = json.loads(zlib.decompress(row["entry_blob"]).decode("utf-8"))
+            except Exception:
+                continue
+            yield row["base_word"], entry
+    else:
+        for item in dictionary.items():
+            yield item
+
+
+def load_dictionary(filepath: str) -> None:
+    """Load JSONL dictionary into memory as a fallback."""
     global dictionary, form_to_entries, normalized_form_to_entries
+
     dictionary = {}
     form_to_entries = {}
     normalized_form_to_entries = {}
+    if "get_entry_data" in globals():
+        get_entry_data.cache_clear()
 
     candidate_paths = [
         filepath,
         os.path.join(os.getcwd(), filepath),
         os.path.join(os.path.dirname(__file__), filepath),
     ]
-
-    file_to_open = next(
-        (path for path in candidate_paths if path and os.path.exists(path)), None
-    )
+    file_to_open = next((p for p in candidate_paths if os.path.exists(p)), None)
 
     if not file_to_open:
         logging.warning(
-            "Dictionary file '%s' not found. Running with empty dictionary.",
-            filepath,
+            "Dictionary file '%s' not found. Running with empty dictionary.", filepath
         )
         return
 
+    def add_case_mapping(term: str, base_word: str, idx: int) -> None:
+        if not term:
+            return
+        key = term.casefold()
+        normalized_form_to_entries.setdefault(key, [])
+        if (base_word, idx) not in normalized_form_to_entries[key]:
+            normalized_form_to_entries[key].append((base_word, idx))
+
     try:
-
-        def add_case_mapping(term: str, base_word: str, idx: int):
-            if not term:
-                return
-
-            normalized_key = term.casefold()
-
-            entries = normalized_form_to_entries.setdefault(normalized_key, [])
-
-            if (base_word, idx) not in entries:
-                entries.append((base_word, idx))
-
-        with open(file_to_open, "r", encoding="utf-8") as f:
-            for raw_line in f:
+        with open(file_to_open, "r", encoding="utf-8") as handle:
+            for raw_line in handle:
                 line = raw_line.strip()
                 if not line:
                     continue
-
                 entry = json.loads(line)
-                word = entry.get("", "")
-                if not word:
+                base_word = entry.get("", "")
+                if not base_word:
                     continue
 
-                dictionary[word] = entry
-
-                add_case_mapping(word, word, 0)
+                dictionary[base_word] = entry
+                add_case_mapping(base_word, base_word, 0)
 
                 forms = entry.get("f", [])
-                forms_ipa = entry.get("f_ipa", [])
-
-                if forms and isinstance(forms, list):
+                if isinstance(forms, list):
                     for idx, form in enumerate(forms):
-                        if form not in form_to_entries:
-                            form_to_entries[form] = []
-                        form_to_entries[form].append((word, idx))
-                        add_case_mapping(form, word, idx)
+                        form_to_entries.setdefault(form, []).append((base_word, idx))
+                        add_case_mapping(form, base_word, idx)
 
-        entry_count = len(dictionary)
-        form_link_count = sum(len(values) for values in form_to_entries.values())
-        casefold_link_count = sum(
-            len(values) for values in normalized_form_to_entries.values()
-        )
         logging.info(
             "Loaded %d dictionary entries (%d forms indexed, %d case-insensitive mappings)",
-            entry_count,
-            form_link_count,
-            casefold_link_count,
+            len(dictionary),
+            sum(len(v) for v in form_to_entries.values()),
+            sum(len(v) for v in normalized_form_to_entries.values()),
         )
     except Exception as exc:
         logging.error("Failed to load dictionary file '%s': %s", file_to_open, exc)
@@ -165,52 +279,42 @@ def load_dictionary(filepath: str):
         normalized_form_to_entries = {}
 
 
-default_dictionary_path = os.environ.get("DICTIONARY_FILE", DICTIONARY_FILE)
-load_dictionary(default_dictionary_path)
+def initialise_dictionary() -> None:
+    """Prefer SQLite; fall back to JSON if unavailable."""
+    conn = get_db_connection()
+    if conn:
+        logging.info("SQLite dictionary initialised successfully.")
+    else:
+        json_path = os.environ.get("DICTIONARY_FILE", DICTIONARY_FILE)
+        load_dictionary(json_path)
+
+
+initialise_dictionary()
+
+# ---------------------------------------------------------------------------
+# Phoneme utilities and rhyme scoring
+# ---------------------------------------------------------------------------
 
 
 def split_into_syllables(ipa_phones: List[str]) -> List[List[str]]:
-    """
-    Split IPA phones into syllables.
-    Each syllable has: (optional onset consonants) + vowel + (optional coda consonants)
-    """
     if not ipa_phones:
         return []
 
-    syllables = []
-    current_syllable = []
-
-    for phone in ipa_phones:
-        current_syllable.append(phone)
-
-        # If we hit a vowel, we might be in the middle of a syllable
-        # Continue until we hit another vowel or run out of phones
-        if phone in VOWELS:
-            # Collect consonants after this vowel (coda)
-            continue
-
-    # Group phones into syllables by finding vowels
-    syllables = []
+    syllables: List[List[str]] = []
     i = 0
     while i < len(ipa_phones):
-        syllable = []
+        syllable: List[str] = []
 
-        # Collect onset consonants
         while i < len(ipa_phones) and ipa_phones[i] not in VOWELS:
             syllable.append(ipa_phones[i])
             i += 1
 
-        # Collect vowel (nucleus)
-        if i < len(ipa_phones) and ipa_phones[i] in VOWELS:
+        if i < len(ipa_phones):
             syllable.append(ipa_phones[i])
             i += 1
 
-        # Collect coda consonants (until next vowel or end)
         while i < len(ipa_phones) and ipa_phones[i] not in VOWELS:
-            # Check if this consonant should start the next syllable
-            # If there are multiple consonants, split them between syllables
             if i + 1 < len(ipa_phones) and ipa_phones[i + 1] in VOWELS:
-                # Next is a vowel, so this consonant starts the next syllable
                 break
             syllable.append(ipa_phones[i])
             i += 1
@@ -221,65 +325,35 @@ def split_into_syllables(ipa_phones: List[str]) -> List[List[str]]:
     return syllables
 
 
-def extract_rhyme_tail(ipa_phones: List[str]) -> List[str]:
-    """
-    Extract rhyme tail: the last syllable (onset + nucleus + coda).
-    """
-    syllables = split_into_syllables(ipa_phones)
-    if syllables:
-        return syllables[-1]
-    return ipa_phones
-
-
 def phone_distance(phone1: str, phone2: str) -> float:
-    """
-    Calculate distance between two phones.
-    Returns 0 for identical, < 1 for similar, 1 for different.
-    """
     if phone1 == phone2:
         return 0.0
 
-    # Check if both are vowels
     if phone1 in VOWELS and phone2 in VOWELS:
         f1 = VOWEL_FEATURES.get(phone1)
         f2 = VOWEL_FEATURES.get(phone2)
         if f1 and f2:
-            # Check height and backness similarity
-            height_match = f1[0] == f2[0]
-            backness_match = f1[1] == f2[1]
-            if height_match or backness_match:
+            if f1[0] == f2[0] or f1[1] == f2[1]:
                 return 0.3
         return 0.7
 
-    # Check if both are consonants
     if phone1 in CONSONANTS and phone2 in CONSONANTS:
         c1 = CONSONANTS[phone1]
         c2 = CONSONANTS[phone2]
-        place_match = c1[0] == c2[0]
-        manner_match = c1[1] == c2[1]
-        if place_match and manner_match:
+        if c1[0] == c2[0] and c1[1] == c2[1]:
             return 0.1
-        elif place_match or manner_match:
+        if c1[0] == c2[0] or c1[1] == c2[1]:
             return 0.4
         return 0.8
 
-    # Different types (vowel vs consonant)
     return 1.0
 
 
 def levenshtein_similarity(
-    tail1: List[str], tail2: List[str], is_last_syllable: bool = False
+    tail1: List[str],
+    tail2: List[str],
+    is_last_syllable: bool = False,
 ) -> float:
-    """
-    Vowel-weighted Levenshtein distance with similarity scoring.
-    Vowels are weighted more heavily than consonants for rhyme matching.
-    Returns score from 0 to 1, where 1 is identical.
-
-    Args:
-        tail1: First phoneme sequence
-        tail2: Second phoneme sequence
-        is_last_syllable: If True, gives extra weight to vowels (nucleus)
-    """
     m, n = len(tail1), len(tail2)
 
     if m == 0 and n == 0:
@@ -287,76 +361,57 @@ def levenshtein_similarity(
     if m == 0 or n == 0:
         return 0.0
 
-    # Find the vowel (nucleus) positions - most important for rhyming
-    vowel_pos1 = -1
-    vowel_pos2 = -1
-    for i, phone in enumerate(tail1):
-        if phone in VOWELS:
-            vowel_pos1 = i
-            break  # Take first vowel (nucleus)
-    for i, phone in enumerate(tail2):
-        if phone in VOWELS:
-            vowel_pos2 = i
-            break
+    vowel_pos1 = next((i for i, p in enumerate(tail1) if p in VOWELS), -1)
+    vowel_pos2 = next((i for i, p in enumerate(tail2) if p in VOWELS), -1)
 
-    # DP table with weighted costs
     dp = [[0.0] * (n + 1) for _ in range(m + 1)]
 
-    # Initialize base cases with weighted costs
     for i in range(1, m + 1):
         weight = 1.5 if tail1[i - 1] in VOWELS else 1.0
         dp[i][0] = dp[i - 1][0] + weight
+
     for j in range(1, n + 1):
         weight = 1.5 if tail2[j - 1] in VOWELS else 1.0
         dp[0][j] = dp[0][j - 1] + weight
 
-    # Fill DP table with vowel-weighted costs
     for i in range(1, m + 1):
         for j in range(1, n + 1):
             phone1 = tail1[i - 1]
             phone2 = tail2[j - 1]
-
-            # Weight calculation: vowels are more important than consonants
             is_vowel1 = phone1 in VOWELS
             is_vowel2 = phone2 in VOWELS
-
-            # Base weight: 1.5 for vowels, 1.0 for consonants
             base_weight = 1.5 if (is_vowel1 or is_vowel2) else 1.0
 
-            # Extra weight if this is the nucleus (primary vowel) of last syllable
-            if is_last_syllable and ((i - 1 == vowel_pos1) or (j - 1 == vowel_pos2)):
-                base_weight *= 1.3  # 30% more weight for nucleus vowel
+            if is_last_syllable and (i - 1 == vowel_pos1 or j - 1 == vowel_pos2):
+                base_weight *= 1.3
 
             if phone1 == phone2:
                 cost = 0
             else:
-                # Use phone_distance but weight vowel mismatches more heavily
-                base_distance = phone_distance(phone1, phone2)
-                cost = base_distance * base_weight
+                cost = phone_distance(phone1, phone2) * base_weight
 
             dp[i][j] = min(
-                dp[i - 1][j] + base_weight,  # deletion
-                dp[i][j - 1] + base_weight,  # insertion
-                dp[i - 1][j - 1] + cost,  # substitution
+                dp[i - 1][j] + base_weight,
+                dp[i][j - 1] + base_weight,
+                dp[i - 1][j - 1] + cost,
             )
 
     distance = dp[m][n]
 
-    # Calculate max possible distance with weights
     max_distance = 0.0
-    for i in range(max(m, n)):
-        if i < m:
-            weight = 1.5 if tail1[i] in VOWELS else 1.0
-            if is_last_syllable and i == vowel_pos1:
+    for idx in range(max(m, n)):
+        if idx < m:
+            weight = 1.5 if tail1[idx] in VOWELS else 1.0
+            if is_last_syllable and idx == vowel_pos1:
                 weight *= 1.3
             max_distance += weight
-        if i < n:
-            weight = 1.5 if tail2[i] in VOWELS else 1.0
-            if is_last_syllable and i == vowel_pos2:
+        if idx < n:
+            weight = 1.5 if tail2[idx] in VOWELS else 1.0
+            if is_last_syllable and idx == vowel_pos2:
                 weight *= 1.3
             max_distance += weight
-    max_distance /= 2.0  # Average of the two
 
+    max_distance /= 2.0
     if max_distance == 0:
         return 1.0
 
@@ -365,19 +420,8 @@ def levenshtein_similarity(
 
 
 def extract_vowel_sequence(syllables: List[List[str]]) -> List[str]:
-    """
-    Extract the vowel sequence from syllables (nucleus of each syllable).
-    This is critical for rhyme quality - words with matching vowel patterns sound similar.
-
-    Args:
-        syllables: List of syllables (each syllable is a list of phones)
-
-    Returns:
-        List of vowels (one per syllable)
-    """
     vowels = []
     for syllable in syllables:
-        # Find the first vowel in the syllable (the nucleus)
         for phone in syllable:
             if phone in VOWELS:
                 vowels.append(phone)
@@ -388,76 +432,39 @@ def extract_vowel_sequence(syllables: List[List[str]]) -> List[str]:
 def calculate_vowel_sequence_similarity(
     vowels1: List[str], vowels2: List[str]
 ) -> float:
-    """
-    Calculate similarity between two vowel sequences.
-    This captures the melodic quality of rhyme - words sound similar if vowel patterns match.
-
-    Returns score from 0 to 1, where 1 is identical vowel sequence.
-    """
     if not vowels1 or not vowels2:
         return 0.0
 
-    # Focus on the last 2-3 vowels (most important for rhyming)
-    # But consider the full sequence for multi-syllable words
-    max_vowels = max(len(vowels1), len(vowels2))
-    min_vowels = min(len(vowels1), len(vowels2))
-
-    if max_vowels == 0:
-        return 0.0
-
-    # Calculate weighted similarity, with more weight on final vowels
-    total_weight = 0.0
+    min_len = min(len(vowels1), len(vowels2))
     total_score = 0.0
+    total_weight = 0.0
 
-    # Compare from the end (most important)
-    for i in range(1, min_vowels + 1):
-        v1 = vowels1[-i]
-        v2 = vowels2[-i]
+    for offset in range(1, min_len + 1):
+        v1 = vowels1[-offset]
+        v2 = vowels2[-offset]
 
-        # Weight: last vowel = 3.0, second-to-last = 2.0, third-to-last = 1.5, rest = 1.0
-        if i == 1:
+        if offset == 1:
             weight = 3.0
-        elif i == 2:
+        elif offset == 2:
             weight = 2.0
-        elif i == 3:
+        elif offset == 3:
             weight = 1.5
         else:
             weight = 1.0
 
-        # Calculate phone similarity
-        if v1 == v2:
-            score = 1.0
-        else:
-            # Use phone_distance but invert it (0 distance = 1.0 similarity)
-            dist = phone_distance(v1, v2)
-            score = 1.0 - dist
-
+        score = 1.0 if v1 == v2 else 1.0 - phone_distance(v1, v2)
         total_score += score * weight
         total_weight += weight
 
-    # Penalize length difference slightly
-    length_penalty = 1.0 - (abs(len(vowels1) - len(vowels2)) * 0.1)
-    length_penalty = max(0.5, length_penalty)  # Don't penalize too much
+    length_penalty = max(0.5, 1.0 - abs(len(vowels1) - len(vowels2)) * 0.1)
 
     if total_weight == 0:
         return 0.0
 
-    similarity = (total_score / total_weight) * length_penalty
-    return max(0.0, min(1.0, similarity))
+    return max(0.0, min(1.0, (total_score / total_weight) * length_penalty))
 
 
 def calculate_multi_syllable_rhyme_score(ipa1: List[str], ipa2: List[str]) -> Dict:
-    """
-    Calculate comprehensive rhyme score considering all syllables.
-    Returns a dict with:
-    - final_score: overall rhyme quality (0-1)
-    - label: rhyme classification
-    - syllables_matched: number of syllables that rhyme
-    - last_syllable_similarity: similarity of the last syllable specifically
-    - penultimate_similarity: similarity of second-to-last syllable (for tiebreaking)
-    - vowel_sequence_similarity: similarity of vowel patterns (for tiebreaking)
-    - length_diff: absolute difference in total syllable count (for tiebreaking)
-    """
     syllables1 = split_into_syllables(ipa1)
     syllables2 = split_into_syllables(ipa2)
 
@@ -472,108 +479,57 @@ def calculate_multi_syllable_rhyme_score(ipa1: List[str], ipa2: List[str]) -> Di
             "length_diff": 0,
         }
 
-    # Calculate last syllable similarity (most important)
-    # Use vowel weighting for last syllable - vowels matter more for rhyming!
     last_syl1 = syllables1[-1]
     last_syl2 = syllables2[-1]
-    last_syllable_sim = levenshtein_similarity(
-        last_syl1, last_syl2, is_last_syllable=True
-    )
+    last_sim = levenshtein_similarity(last_syl1, last_syl2, is_last_syllable=True)
 
-    # Calculate penultimate syllable similarity (for tiebreaking when last syllables match)
     penultimate_sim = 0.0
     if len(syllables1) >= 2 and len(syllables2) >= 2:
-        penult_syl1 = syllables1[-2]
-        penult_syl2 = syllables2[-2]
         penultimate_sim = levenshtein_similarity(
-            penult_syl1, penult_syl2, is_last_syllable=False
+            syllables1[-2], syllables2[-2], is_last_syllable=False
         )
 
-    # Calculate vowel sequence similarity (CRITICAL for rhyme quality)
-    # Words with matching vowel patterns sound more similar, even if consonants differ
     vowels1 = extract_vowel_sequence(syllables1)
     vowels2 = extract_vowel_sequence(syllables2)
     vowel_seq_sim = calculate_vowel_sequence_similarity(vowels1, vowels2)
 
-    # Calculate length difference (prefer similar length words)
     length_diff = abs(len(syllables1) - len(syllables2))
+    identical_last = last_syl1 == last_syl2
 
-    # Check if last syllables are identical
-    last_syllables_identical = last_syl1 == last_syl2
-
-    # Count consecutive matching syllables from the end
-    # The last syllable always "participates" if there's any rhyme at all
-    syllables_matched = 0
-    min_syllables = min(len(syllables1), len(syllables2))
-
-    # First, count the last syllable if it has decent similarity
-    if last_syllable_sim >= 0.5:
-        syllables_matched = 1
-
-    # Then check previous syllables (only if last syllable is near-perfect)
-    # IMPORTANT: Only give multi-syllable bonus if the last syllable is very high quality
-    # This prevents inflating mediocre rhymes to perfect scores
-    if syllables_matched > 0 and last_syllable_sim >= 0.90:
-        for i in range(2, min_syllables + 1):
-            syl1 = syllables1[-i]
-            syl2 = syllables2[-i]
-
-            if syl1 == syl2:
-                # Identical syllables count
+    syllables_matched = 1 if last_sim >= 0.5 else 0
+    if syllables_matched and last_sim >= 0.90:
+        min_syllables = min(len(syllables1), len(syllables2))
+        for idx in range(2, min_syllables + 1):
+            candidate1 = syllables1[-idx]
+            candidate2 = syllables2[-idx]
+            if candidate1 == candidate2:
+                syllables_matched += 1
+                continue
+            sim = levenshtein_similarity(candidate1, candidate2)
+            if sim >= 0.90:
                 syllables_matched += 1
             else:
-                sim = levenshtein_similarity(syl1, syl2, is_last_syllable=False)
-                # For additional syllables, require very high similarity (90%+)
-                # This ensures we only give bonus for true multi-syllable rhymes
-                if sim >= 0.90:
-                    syllables_matched += 1
-                else:
-                    # Stop - this syllable doesn't match well enough
-                    break
+                break
 
-    # Calculate bonus for multi-syllable rhymes
-    # Only give bonus if we have MORE than just the last syllable matching
-    # AND the last syllable itself is very high quality (checked above)
-    multi_syllable_bonus = 0.0
-    if syllables_matched > 1:
-        # Bonus: 0.08 for each additional matching syllable beyond the first
-        # Conservative bonus to prevent over-inflation
-        multi_syllable_bonus = 0.08 * (syllables_matched - 1)
+    multi_bonus = 0.08 * (syllables_matched - 1) if syllables_matched > 1 else 0.0
+    base_score = last_sim
+    final_score = min(1.0, base_score + multi_bonus)
 
-    # Base score on last syllable similarity
-    base_score = last_syllable_sim
-
-    # Add multi-syllable bonus (but cap at 1.0)
-    final_score = min(1.0, base_score + multi_syllable_bonus)
-
-    # IMPORTANT: Incorporate vowel sequence similarity into final score
-    # This ensures words with matching vowel patterns rank higher
-    # Weight vowel sequence more heavily when base score is high (85%+)
-    # This handles cases like:
-    #   - "f ə r a l" (ֆռալ) vs "ɡ ə n a l" (գնալ): vowels match perfectly (ə,a)
-    #   - "d a r ə n a l" (դառնալ) vs "ɡ ə n a l" (գնալ): vowels don't match as well (a,ə,a)
     if base_score >= 0.85:
-        # For high-quality rhymes, blend in vowel sequence similarity
-        # This allows vowel-matched rhymes to rank above consonant-only matches
-        vowel_weight = 0.15  # 15% contribution from vowel sequence
         final_score = min(
-            1.0, final_score * (1 - vowel_weight) + vowel_seq_sim * vowel_weight
+            1.0,
+            final_score * 0.85 + vowel_seq_sim * 0.15,  # 15% weight to vowels
         )
 
-    # Determine label based on last syllable matching
     label = get_rhyme_label_from_score(
-        last_syl1,
-        last_syl2,
-        last_syllable_sim,
-        last_syllables_identical,
-        syllables_matched,
+        last_syl1, last_syl2, last_sim, identical_last, syllables_matched
     )
 
     return {
         "final_score": final_score,
         "label": label,
         "syllables_matched": syllables_matched,
-        "last_syllable_similarity": last_syllable_sim,
+        "last_syllable_similarity": last_sim,
         "penultimate_similarity": penultimate_sim,
         "vowel_sequence_similarity": vowel_seq_sim,
         "length_diff": length_diff,
@@ -587,241 +543,165 @@ def get_rhyme_label_from_score(
     identical: bool,
     syllables_matched: int,
 ) -> str:
-    """
-    Classify rhyme type based on criteria.
-    Perfect: Only for truly exceptional rhymes (99%+ or identical)
-    Near-perfect: 90%+ similarity
-    Assonance: Same vowel sound, 70%+
-    Slant: 50%+
-    """
     if identical:
         return "perfect"
 
-    # Extract nucleus (vowel) from each tail
-    nucleus1 = None
-    nucleus2 = None
-    for phone in tail1:
-        if phone in VOWELS:
-            nucleus1 = phone
-            break
-    for phone in tail2:
-        if phone in VOWELS:
-            nucleus2 = phone
-            break
-
+    nucleus1 = next((p for p in tail1 if p in VOWELS), None)
+    nucleus2 = next((p for p in tail2 if p in VOWELS), None)
     same_nucleus = nucleus1 == nucleus2
 
-    # Perfect: Only for truly exceptional rhymes
-    # Multi-syllable rhymes with very high similarity (99%+)
     if syllables_matched >= 2 and similarity >= 0.99:
         return "perfect"
-
-    # Near-perfect: High quality rhymes
     if syllables_matched >= 2 and similarity >= 0.90:
         return "near-perfect"
-    elif similarity >= 0.93 and same_nucleus:
+    if similarity >= 0.93 and same_nucleus:
         return "near-perfect"
-
-    # Assonance: Same vowel, decent similarity
     if same_nucleus and similarity >= 0.70:
         return "assonance"
-
-    # Slant: Moderate similarity
     if similarity >= 0.50:
         return "slant"
-
     return "none"
+
+
+# ---------------------------------------------------------------------------
+# Dictionary query helpers
+# ---------------------------------------------------------------------------
+
+
+def resolve_query_entries(input_word: str) -> List[Tuple[str, int]]:
+    normalized = input_word.casefold()
+
+    if USE_SQLITE:
+        entries = resolve_sqlite_forms(input_word)
+        if entries:
+            return entries
+        conn = get_db_connection()
+        if conn:
+            row = conn.execute(
+                "SELECT base_word FROM entries "
+                "WHERE base_word = ? COLLATE NOCASE LIMIT 1",
+                (input_word,),
+            ).fetchone()
+            if row:
+                return [(row["base_word"], 0)]
+        return []
+
+    if input_word in dictionary:
+        return [(input_word, 0)]
+    if input_word in form_to_entries:
+        return form_to_entries[input_word]
+    return normalized_form_to_entries.get(normalized, [])
+
+
+@lru_cache(maxsize=8192)
+def get_entry_data(base_word: str) -> Optional[dict]:
+    if USE_SQLITE:
+        return fetch_entry_from_sqlite(base_word)
+    return dictionary.get(base_word)
+
+
+# ---------------------------------------------------------------------------
+# Rhyme search
+# ---------------------------------------------------------------------------
 
 
 def find_rhymes(
     input_word: str, limit: int = 50, offset: int = 0, include_tenses: bool = False
-) -> Tuple[List[Dict], int]:
-    """
-    Find rhyming words for the given Armenian word or form.
-    - If include_tenses=False: return only base words (first form of each entry)
-    - If include_tenses=True: return all forms/tenses of all matching entries
-
-    Returns sorted list of rhymes with scores and labels.
-    """
+) -> Tuple[List[dict], int]:
     input_word = input_word.strip()
-
-    # Find which dictionary entries match the input (could be base word or a form)
-    query_entries = []
-
-    normalized_input = input_word.casefold()
-
-    if input_word in dictionary:
-        # Direct match - it's a base word
-        query_entries = [(input_word, 0)]  # (base_word, form_index)
-    elif input_word in form_to_entries:
-        # It's a form of some word(s)
-        query_entries = form_to_entries[input_word]
-    elif normalized_input in normalized_form_to_entries:
-        # Case-insensitive match against base words or forms
-        query_entries = normalized_form_to_entries[normalized_input]
-    else:
-        # No match
+    if not input_word:
         return [], 0
 
-    matched_base_words = {base_word for base_word, _ in query_entries}
+    query_entries = resolve_query_entries(input_word)
+    if not query_entries:
+        return [], 0
 
-    # Get IPA for the query word (use first form if it's a base word, or the matched form)
     query_ipa = None
+    matched_base_words = {base for base, _ in query_entries}
+
     for base_word, form_idx in query_entries:
-        entry = dictionary[base_word]
-        forms_ipa = entry.get("f_ipa", [])
-        if forms_ipa and form_idx < len(forms_ipa):
+        entry = get_entry_data(base_word)
+        if not entry:
+            continue
+        forms_ipa = entry.get("f_ipa") or []
+        if form_idx < len(forms_ipa):
             query_ipa = forms_ipa[form_idx].split()
             break
 
     if not query_ipa:
         return [], 0
 
-    rhymes = []
-    seen = set()  # Track (base_word, display_word) to avoid duplicates
+    rhymes: List[dict] = []
+    seen: set = set()
 
-    # Search through all words
-    for dict_word, entry in dictionary.items():
-        # Skip the query word itself
-        if dict_word in matched_base_words:
+    for base_word, entry in iterate_dictionary_entries():
+        if base_word in matched_base_words or not entry:
             continue
 
-        forms = entry.get("f", [])
-        forms_ipa = entry.get("f_ipa", [])
-
+        forms = entry.get("f") or []
+        forms_ipa = entry.get("f_ipa") or []
         if not forms or not forms_ipa or len(forms) != len(forms_ipa):
             continue
 
-        if include_tenses:
-            # Check all forms/tenses
-            for idx in range(len(forms)):
-                display_word = forms[idx]
-                ipa_str = forms_ipa[idx]
+        indices = range(len(forms)) if include_tenses else range(1)
+        for idx in indices:
+            display = forms[idx]
+            candidate_ipa = forms_ipa[idx].split()
+            result = calculate_multi_syllable_rhyme_score(query_ipa, candidate_ipa)
 
-                candidate_ipa = ipa_str.split()
+            if result["final_score"] < 0.3 or result["label"] == "none":
+                continue
 
-                # Use multi-syllable scoring
-                rhyme_result = calculate_multi_syllable_rhyme_score(
-                    query_ipa, candidate_ipa
-                )
+            key = (base_word, display)
+            if key in seen:
+                continue
+            seen.add(key)
 
-                # Only include if there's some similarity
-                if rhyme_result["final_score"] < 0.3:
-                    continue
-
-                # Skip "none" category
-                if rhyme_result["label"] == "none":
-                    continue
-
-                # Avoid duplicates
-                key = (dict_word, display_word)
-                if key in seen:
-                    continue
-                seen.add(key)
-
-                rhyme_entry = {
-                    "word": display_word,
-                    "base_word": dict_word,
-                    "similarity": round(rhyme_result["final_score"], 3),
-                    "label": rhyme_result["label"],
-                    "syllables_matched": rhyme_result["syllables_matched"],
+            rhymes.append(
+                {
+                    "word": display,
+                    "base_word": base_word,
+                    "similarity": round(result["final_score"], 3),
+                    "label": result["label"],
+                    "syllables_matched": result["syllables_matched"],
                     "definition": (entry.get("d") or [""])[0] if entry.get("d") else "",
                     "part_of_speech": (entry.get("p") or [""])[0]
                     if entry.get("p")
                     else "",
-                    "is_base_form": (idx == 0),
-                    # Store tiebreaker metrics (not shown to user, used for sorting)
-                    "_penultimate_similarity": rhyme_result["penultimate_similarity"],
-                    "_vowel_sequence_similarity": rhyme_result[
-                        "vowel_sequence_similarity"
-                    ],
-                    "_length_diff": rhyme_result["length_diff"],
+                    "is_base_form": idx == 0,
+                    "_penultimate_similarity": result["penultimate_similarity"],
+                    "_vowel_sequence_similarity": result["vowel_sequence_similarity"],
+                    "_length_diff": result["length_diff"],
                 }
-                rhymes.append(rhyme_entry)
-        else:
-            # Check only first form (base word)
-            if forms and forms_ipa:
-                display_word = forms[0]
-                ipa_str = forms_ipa[0]
+            )
 
-                candidate_ipa = ipa_str.split()
-
-                # Use multi-syllable scoring
-                rhyme_result = calculate_multi_syllable_rhyme_score(
-                    query_ipa, candidate_ipa
-                )
-
-                # Only include if there's some similarity
-                if rhyme_result["final_score"] < 0.3:
-                    continue
-
-                # Skip "none" category
-                if rhyme_result["label"] == "none":
-                    continue
-
-                key = (dict_word, display_word)
-                if key in seen:
-                    continue
-                seen.add(key)
-
-                rhyme_entry = {
-                    "word": display_word,
-                    "base_word": dict_word,
-                    "similarity": round(rhyme_result["final_score"], 3),
-                    "label": rhyme_result["label"],
-                    "syllables_matched": rhyme_result["syllables_matched"],
-                    "definition": (entry.get("d") or [""])[0] if entry.get("d") else "",
-                    "part_of_speech": (entry.get("p") or [""])[0]
-                    if entry.get("p")
-                    else "",
-                    "is_base_form": True,
-                    # Store tiebreaker metrics (not shown to user, used for sorting)
-                    "_penultimate_similarity": rhyme_result["penultimate_similarity"],
-                    "_vowel_sequence_similarity": rhyme_result[
-                        "vowel_sequence_similarity"
-                    ],
-                    "_length_diff": rhyme_result["length_diff"],
-                }
-                rhymes.append(rhyme_entry)
-
-    # Sort with multiple tiebreakers:
-    # 1. Primary: similarity score (higher is better)
-    # 2. Tiebreaker 1: vowel sequence similarity (CRITICAL - higher is better)
-    # 3. Tiebreaker 2: penultimate syllable similarity (higher is better)
-    # 4. Tiebreaker 3: length difference (smaller is better - prefer similar length words)
-    # 5. Tiebreaker 4: label priority
-    # This ensures that when last syllables match, words with similar vowel patterns rank higher
-    # Example: "ɡ ə ɹ a v e l" ranks higher with "k ə ɹ a k e l" (vowels: ə,a,e match)
-    #          than with "a kʰ ə s o r v e l" (vowels: a,ə,o,e don't match as well)
     label_priority = {"perfect": 0, "near-perfect": 1, "assonance": 2, "slant": 3}
     rhymes.sort(
         key=lambda x: (
-            -x["similarity"],  # Primary: highest similarity first
-            -x.get(
-                "_vowel_sequence_similarity", 0
-            ),  # Tiebreaker 1: vowel pattern match (MOST IMPORTANT)
-            -x.get(
-                "_penultimate_similarity", 0
-            ),  # Tiebreaker 2: earlier syllable match
-            x.get("_length_diff", 999),  # Tiebreaker 3: prefer similar length
-            label_priority.get(x["label"], 4),  # Tiebreaker 4: label priority
+            -x["similarity"],
+            -x.get("_vowel_sequence_similarity", 0),
+            -x.get("_penultimate_similarity", 0),
+            x.get("_length_diff", 999),
+            label_priority.get(x["label"], 4),
         )
     )
 
-    # Remove internal tiebreaker fields before returning
     for rhyme in rhymes:
         rhyme.pop("_penultimate_similarity", None)
         rhyme.pop("_vowel_sequence_similarity", None)
         rhyme.pop("_length_diff", None)
 
-    total_matches = len(rhymes)
-    paginated_rhymes = rhymes[offset : offset + limit]
-    return paginated_rhymes, total_matches
+    total = len(rhymes)
+    return rhymes[offset : offset + limit], total
+
+
+# ---------------------------------------------------------------------------
+# API Endpoints
+# ---------------------------------------------------------------------------
 
 
 @app.route("/api/rhymes", methods=["GET"])
 def get_rhymes():
-    """API endpoint to get rhymes for a word"""
     word = request.args.get("word", "").strip()
     limit = request.args.get("limit", 50, type=int)
     offset = request.args.get("offset", 0, type=int)
@@ -832,6 +712,7 @@ def get_rhymes():
 
     rhymes, total = find_rhymes(word, limit, offset, include_tenses)
     has_more = (offset + len(rhymes)) < total
+
     return jsonify(
         {
             "word": word,
@@ -847,62 +728,124 @@ def get_rhymes():
 
 @app.route("/api/search", methods=["GET"])
 def search():
-    """API endpoint to search for words"""
     query = request.args.get("q", "").strip().lower()
-
     if not query:
         return jsonify({"results": []})
 
-    results = []
-    for word in dictionary.keys():
-        if query in word.lower():
-            results.append(
-                {
-                    "word": word,
-                    "definition": dictionary[word].get("d", [""])[0],
-                    "pos": dictionary[word].get("p", [""])[0],
-                }
-            )
-            if len(results) >= 20:
-                break
+    results: List[dict] = []
+    seen: set = set()
 
-    return jsonify({"results": results})
+    escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    like_pattern = f"%{escaped}%"
+
+    if USE_SQLITE:
+        conn = get_db_connection()
+        if conn:
+            cursor = conn.execute(
+                "SELECT base_word, entry_blob, definition, part_of_speech "
+                "FROM entries WHERE base_word LIKE ? ESCAPE '\\\\' "
+                "COLLATE NOCASE LIMIT ?",
+                (like_pattern, AUTOCOMPLETE_LIMIT),
+            )
+            for row in cursor:
+                base_word = row["base_word"]
+                if base_word in seen:
+                    continue
+                definition = row["definition"] or ""
+                pos = row["part_of_speech"] or ""
+                if not definition or not pos:
+                    try:
+                        entry = json.loads(
+                            zlib.decompress(row["entry_blob"]).decode("utf-8")
+                        )
+                    except Exception:
+                        entry = {}
+                    definition = definition or (
+                        (entry.get("d") or [""])[0] if entry.get("d") else ""
+                    )
+                    pos = pos or ((entry.get("p") or [""])[0] if entry.get("p") else "")
+
+                results.append(
+                    {
+                        "word": base_word,
+                        "definition": definition,
+                        "pos": pos,
+                    }
+                )
+                seen.add(base_word)
+                if len(results) >= AUTOCOMPLETE_LIMIT:
+                    break
+
+    if not USE_SQLITE or len(results) < AUTOCOMPLETE_LIMIT:
+        query_cf = query.casefold()
+        for base_word, entry in iterate_dictionary_entries():
+            if not entry or base_word in seen:
+                continue
+            if query_cf in base_word.casefold():
+                results.append(
+                    {
+                        "word": base_word,
+                        "definition": (entry.get("d") or [""])[0]
+                        if entry.get("d")
+                        else "",
+                        "pos": (entry.get("p") or [""])[0] if entry.get("p") else "",
+                    }
+                )
+                seen.add(base_word)
+                if len(results) >= AUTOCOMPLETE_LIMIT:
+                    break
+
+    return jsonify({"results": results[:AUTOCOMPLETE_LIMIT]})
 
 
 @app.route("/api/word/<word>", methods=["GET"])
-def get_word_info(word):
-    """Get detailed info about a word"""
-    if word not in dictionary:
+def get_word_info(word: str):
+    entry = get_entry_data(word)
+    if not entry and USE_SQLITE:
+        resolved = resolve_query_entries(word)
+        if resolved:
+            entry = get_entry_data(resolved[0][0])
+
+    if not entry:
         return jsonify({"error": "Word not found"}), 404
 
-    entry = dictionary[word]
     return jsonify(
         {
-            "word": word,
-            "definition": entry.get("d", [""])[0],
-            "pos": entry.get("p", [""])[0],
-            "forms_count": len(entry.get("f", [])),
+            "word": entry.get("", word),
+            "definition": (entry.get("d") or [""])[0] if entry.get("d") else "",
+            "pos": (entry.get("p") or [""])[0] if entry.get("p") else "",
+            "forms_count": len(entry.get("f") or []),
+            "syllable_count": len(entry.get("f_ipa") or []),
         }
     )
 
 
 @app.route("/api/stats", methods=["GET"])
 def get_stats():
-    """Get dictionary statistics"""
-    return jsonify(
-        {
-            "total_words": len(dictionary),
-        }
-    )
+    if USE_SQLITE:
+        conn = get_db_connection()
+        total = 0
+        if conn:
+            row = conn.execute("SELECT COUNT(*) AS count FROM entries").fetchone()
+            if row:
+                total = row["count"]
+        return jsonify({"total_words": total})
+    return jsonify({"total_words": len(dictionary)})
 
+
+# ---------------------------------------------------------------------------
+# Entrypoint
+# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    # Load dictionary
     try:
-        load_dictionary("dictionary-hy-improved.jsonl")
-        print(f"Loaded {len(dictionary)} words from dictionary")
-        print(f"Indexed {len(form_to_entries)} total forms/tenses")
-    except Exception as e:
-        print(f"Error loading dictionary: {e}")
+        initialise_dictionary()
+        print("Dictionary backend initialised.")
+    except Exception as exc:
+        print(f"Failed to initialise dictionary: {exc}")
 
-    app.run(debug=True, port=5000)
+    app.run(
+        host=os.environ.get("FLASK_HOST", "127.0.0.1"),
+        port=int(os.environ.get("FLASK_PORT", "5000")),
+        debug=os.environ.get("FLASK_DEBUG", "False").lower() == "true",
+    )
