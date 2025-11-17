@@ -44,7 +44,7 @@ instance/
 .webassets-cache
 
 # Database/Cache
-*.db
+#*.db
 *.sqlite
 *.sqlite3
 *.jsonl.bak
