@@ -741,40 +741,59 @@ def search():
     if USE_SQLITE:
         conn = get_db_connection()
         if conn:
-            cursor = conn.execute(
-                "SELECT base_word, entry_blob, definition, part_of_speech "
-                "FROM entries WHERE base_word LIKE ? ESCAPE '\\\\' "
-                "COLLATE NOCASE LIMIT ?",
-                (like_pattern, AUTOCOMPLETE_LIMIT),
-            )
-            for row in cursor:
-                base_word = row["base_word"]
-                if base_word in seen:
-                    continue
-                definition = row["definition"] or ""
-                pos = row["part_of_speech"] or ""
-                if not definition or not pos:
-                    try:
-                        entry = json.loads(
-                            zlib.decompress(row["entry_blob"]).decode("utf-8")
-                        )
-                    except Exception:
-                        entry = {}
-                    definition = definition or (
-                        (entry.get("d") or [""])[0] if entry.get("d") else ""
-                    )
-                    pos = pos or ((entry.get("p") or [""])[0] if entry.get("p") else "")
-
-                results.append(
-                    {
-                        "word": base_word,
-                        "definition": definition,
-                        "pos": pos,
-                    }
+            try:
+                cursor = conn.execute(
+                    "SELECT base_word, entry_blob, definition, part_of_speech "
+                    "FROM entries WHERE base_word LIKE ? ESCAPE '\\\\' "
+                    "COLLATE NOCASE LIMIT ?",
+                    (like_pattern, AUTOCOMPLETE_LIMIT),
                 )
-                seen.add(base_word)
-                if len(results) >= AUTOCOMPLETE_LIMIT:
-                    break
+                for row in cursor:
+                    base_word = row["base_word"]
+                    if base_word in seen:
+                        continue
+                    definition = row["definition"] or ""
+                    pos = row["part_of_speech"] or ""
+                    supplemental_entry: dict = {}
+                    if (not definition or not pos) and row["entry_blob"]:
+                        try:
+                            supplemental_entry = json.loads(
+                                zlib.decompress(row["entry_blob"]).decode("utf-8")
+                            )
+                        except Exception as exc:
+                            logging.warning(
+                                "Failed to decompress autocomplete entry '%s': %s",
+                                base_word,
+                                exc,
+                            )
+                    if not definition and supplemental_entry:
+                        definition = (
+                            (supplemental_entry.get("d") or [""])[0]
+                            if supplemental_entry.get("d")
+                            else ""
+                        )
+                    if not pos and supplemental_entry:
+                        pos = (
+                            (supplemental_entry.get("p") or [""])[0]
+                            if supplemental_entry.get("p")
+                            else ""
+                        )
+                    results.append(
+                        {
+                            "word": base_word,
+                            "definition": definition,
+                            "pos": pos,
+                        }
+                    )
+                    seen.add(base_word)
+                    if len(results) >= AUTOCOMPLETE_LIMIT:
+                        break
+            except Exception as exc:
+                logging.error(
+                    "SQLite autocomplete query failed for '%s': %s",
+                    query,
+                    exc,
+                )
 
     if not USE_SQLITE or len(results) < AUTOCOMPLETE_LIMIT:
         query_cf = query.casefold()
