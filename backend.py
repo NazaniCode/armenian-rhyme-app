@@ -49,6 +49,18 @@ def home():
     return send_from_directory(".", "index.html")
 
 
+@app.route("/favicon.ico")
+def favicon_ico():
+    """Serve the browser tab icon from the app root."""
+    return send_from_directory(".", "favicon.ico", mimetype="image/x-icon")
+
+
+@app.route("/favicon.png")
+def favicon_png():
+    """Serve the browser tab icon as a PNG fallback."""
+    return send_from_directory(".", "favicon.png", mimetype="image/png")
+
+
 # ---------------------------------------------------------------------------
 # Phoneme feature definitions
 # ---------------------------------------------------------------------------
