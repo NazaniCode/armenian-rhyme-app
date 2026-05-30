@@ -38,6 +38,36 @@ dictionary: Dict[str, dict] = {}
 form_to_entries: Dict[str, List[Tuple[str, int]]] = {}
 normalized_form_to_entries: Dict[str, List[Tuple[str, int]]] = {}
 
+
+def unicode_nocase_compare(left: str, right: str) -> int:
+    """SQLite collation callback that handles Armenian and other Unicode casing."""
+    left_folded = (left or "").casefold()
+    right_folded = (right or "").casefold()
+    return (left_folded > right_folded) - (left_folded < right_folded)
+
+
+def case_variants(term: str) -> List[str]:
+    """Return exact and Unicode-casefolded variants without duplicates."""
+    variants: List[str] = []
+    for value in (term, term.casefold()):
+        if value not in variants:
+            variants.append(value)
+    return variants
+
+
+def autocomplete_rank(word: str, query: str) -> Tuple[int, int, str]:
+    """Rank autocomplete matches by relevance before dictionary order."""
+    word_cf = word.casefold()
+    query_cf = query.casefold()
+    if word_cf == query_cf:
+        tier = 0
+    elif word_cf.startswith(query_cf):
+        tier = 1
+    else:
+        tier = 2
+    return (tier, len(word), word_cf)
+
+
 # ---------------------------------------------------------------------------
 # Static file serving
 # ---------------------------------------------------------------------------
@@ -140,6 +170,7 @@ def get_db_connection() -> Optional[sqlite3.Connection]:
     try:
         connection = sqlite3.connect(db_path, check_same_thread=False)
         connection.row_factory = sqlite3.Row
+        connection.create_collation("UNICODE_NOCASE", unicode_nocase_compare)
 
         # Ensure schema exists
         required_tables = {"entries", "forms"}
@@ -202,11 +233,56 @@ def resolve_sqlite_forms(term: str) -> List[Tuple[str, int]]:
     if not conn:
         return []
 
-    cursor = conn.execute(
-        "SELECT base_word, form_index FROM forms WHERE form = ? COLLATE NOCASE",
-        (term,),
+    entries: List[Tuple[str, int]] = []
+    seen: set = set()
+
+    def add_rows(cursor: sqlite3.Cursor) -> None:
+        for row in cursor:
+            key = (row["base_word"], row["form_index"])
+            if key not in seen:
+                entries.append(key)
+                seen.add(key)
+
+    for variant in case_variants(term):
+        add_rows(
+            conn.execute(
+                "SELECT base_word, form_index FROM forms WHERE form = ?",
+                (variant,),
+            )
+        )
+        if entries:
+            return entries
+
+    add_rows(
+        conn.execute(
+            "SELECT base_word, form_index FROM forms "
+            "WHERE form = ? COLLATE UNICODE_NOCASE",
+            (term,),
+        )
     )
-    return [(row["base_word"], row["form_index"]) for row in cursor]
+    return entries
+
+
+def resolve_sqlite_base_word(term: str) -> Optional[str]:
+    """Resolve a base word using Unicode-aware case-insensitive matching."""
+    conn = get_db_connection()
+    if not conn:
+        return None
+
+    for variant in case_variants(term):
+        row = conn.execute(
+            "SELECT base_word FROM entries WHERE base_word = ? LIMIT 1",
+            (variant,),
+        ).fetchone()
+        if row:
+            return row["base_word"]
+
+    row = conn.execute(
+        "SELECT base_word FROM entries "
+        "WHERE base_word = ? COLLATE UNICODE_NOCASE LIMIT 1",
+        (term,),
+    ).fetchone()
+    return row["base_word"] if row else None
 
 
 def iterate_dictionary_entries() -> Iterable[Tuple[str, dict]]:
@@ -587,15 +663,9 @@ def resolve_query_entries(input_word: str) -> List[Tuple[str, int]]:
         entries = resolve_sqlite_forms(input_word)
         if entries:
             return entries
-        conn = get_db_connection()
-        if conn:
-            row = conn.execute(
-                "SELECT base_word FROM entries "
-                "WHERE base_word = ? COLLATE NOCASE LIMIT 1",
-                (input_word,),
-            ).fetchone()
-            if row:
-                return [(row["base_word"], 0)]
+        base_word = resolve_sqlite_base_word(input_word)
+        if base_word:
+            return [(base_word, 0)]
         return []
 
     if input_word in dictionary:
@@ -749,6 +819,7 @@ def search():
 
     escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     like_pattern = f"%{escaped}%"
+    prefix_pattern = f"{escaped}%"
 
     if USE_SQLITE:
         conn = get_db_connection()
@@ -756,9 +827,14 @@ def search():
             try:
                 cursor = conn.execute(
                     "SELECT base_word, entry_blob, definition, part_of_speech "
-                    "FROM entries WHERE base_word LIKE ? ESCAPE '\\\\' "
-                    "COLLATE NOCASE LIMIT ?",
-                    (like_pattern, AUTOCOMPLETE_LIMIT),
+                    "FROM entries WHERE base_word LIKE ? ESCAPE '\\' "
+                    "COLLATE NOCASE "
+                    "ORDER BY CASE "
+                    "WHEN base_word = ? COLLATE UNICODE_NOCASE THEN 0 "
+                    "WHEN base_word LIKE ? ESCAPE '\\' COLLATE NOCASE THEN 1 "
+                    "ELSE 2 END, length(base_word), base_word COLLATE UNICODE_NOCASE "
+                    "LIMIT ?",
+                    (like_pattern, query, prefix_pattern, AUTOCOMPLETE_LIMIT),
                 )
                 for row in cursor:
                     base_word = row["base_word"]
@@ -809,11 +885,12 @@ def search():
 
     if not USE_SQLITE or len(results) < AUTOCOMPLETE_LIMIT:
         query_cf = query.casefold()
+        fallback_results: List[dict] = []
         for base_word, entry in iterate_dictionary_entries():
             if not entry or base_word in seen:
                 continue
             if query_cf in base_word.casefold():
-                results.append(
+                fallback_results.append(
                     {
                         "word": base_word,
                         "definition": (entry.get("d") or [""])[0]
@@ -822,9 +899,12 @@ def search():
                         "pos": (entry.get("p") or [""])[0] if entry.get("p") else "",
                     }
                 )
-                seen.add(base_word)
-                if len(results) >= AUTOCOMPLETE_LIMIT:
-                    break
+        fallback_results.sort(key=lambda item: autocomplete_rank(item["word"], query))
+        for item in fallback_results:
+            results.append(item)
+            seen.add(item["word"])
+            if len(results) >= AUTOCOMPLETE_LIMIT:
+                break
 
     return jsonify({"results": results[:AUTOCOMPLETE_LIMIT]})
 
