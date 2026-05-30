@@ -394,6 +394,7 @@
   let totalResults   = 0;
   let renderedCount  = 0;
   let activePosFilter= null;
+  let autoLoadTimer  = null;
 
   /* ─────────────────────────────────────────────────────────────
      DOM refs
@@ -466,10 +467,13 @@
         const d = await r.json();
         if (d.results.length) {
           autocompleteList.innerHTML = d.results.map((item) =>
-            `<div class="autocomplete-item" onclick="selectWord('${item.word.replace(/'/g,"\\'")}')">
-              <strong>${item.word}</strong>
-              <span>${item.pos ? item.pos + " · " : ""}${item.definition || ""}</span>
-            </div>`
+            {
+              const posHy = getPosLabel(item.pos);
+              return `<div class="autocomplete-item" onclick="selectWord('${item.word.replace(/'/g,"\\'")}')">
+                <strong>${item.word}</strong>
+                <span>${posHy ? posHy + " · " : ""}${item.definition || ""}</span>
+              </div>`;
+            }
           ).join("");
           autocompleteList.style.display = "block";
         } else { hideAutocomplete(); }
@@ -512,6 +516,7 @@
     renderedCount  = 0;
     totalResults   = 0;
     resultsSection.style.display = "none";
+    cancelAutoLoad();
     toggleLoadingMore(false);
     hideError();
     await fetchRhymes(true);
@@ -545,6 +550,7 @@
       else        { rhymesCache = rhymesCache.concat(newRhymes); }
 
       renderResults({ word: data.word, total: totalResults, reset });
+      scheduleAutoLoadIfNeeded();
     } catch (err) {
       showError("Սխալ հանգեր որոնելիս · " + err.message);
     } finally {
@@ -587,6 +593,19 @@
     return { ...r, _npos: normalizePos(r.part_of_speech) };
   }
 
+  function getPosLabel(pos) {
+    if (!pos) return "";
+    const key = pos.toLowerCase().trim();
+    const normalized = normalizePos(pos);
+    const exact = POS_HY[key] || POS_HY[normalized];
+    if (exact) return exact;
+
+    const labels = Object.keys(FILTER_MAP)
+      .filter(filter => matchesFilter(normalized, filter))
+      .map(filter => POS_HY[filter]);
+    return labels.length ? Array.from(new Set(labels)).join(", ") : pos;
+  }
+
   /* ─────────────────────────────────────────────────────────────
      Filter helpers
   ───────────────────────────────────────────────────────────── */
@@ -602,6 +621,7 @@
       updateFilterUI();
       if (!currentWord || !rhymesCache.length) return;
       renderResults({ word: currentWord, total: totalResults, reset: false, forceRefresh: true });
+      scheduleAutoLoadIfNeeded();
     });
   });
 
@@ -620,8 +640,9 @@
     const filtered = getFiltered();
 
     if (!filtered.length) {
+      const filterLabel = getPosLabel(activePosFilter);
       const msg = activePosFilter
-        ? `Ոչ մի "${activePosFilter}" հանգ չի գտնվել «${word || currentWord}» բառի համար`
+        ? `Ոչ մի "${filterLabel}" հանգ չի գտնվել «${word || currentWord}» բառի համար`
         : `Հանգեր չգտնվեցին «${word || currentWord}» բառի համար`;
       resultCount.innerHTML = msg;
       resultsContainer.innerHTML = `<div class="empty-state"><p>${msg}</p></div>`;
@@ -635,12 +656,13 @@
       (total ? ` / <span class="mono">${total.toLocaleString("hy")}</span>` : "") +
       ` · «${word || currentWord}»`;
 
-    if (reset || forceRefresh) {
+    const hadEmptyState = !!resultsContainer.querySelector(".empty-state");
+    if (reset || forceRefresh || hadEmptyState) {
       resultsContainer.innerHTML = "";
       renderedCount = 0;
     }
 
-    const toAdd = (reset || forceRefresh)
+    const toAdd = (reset || forceRefresh || hadEmptyState)
       ? filtered : filtered.slice(renderedCount);
 
     if (toAdd.length) {
@@ -662,7 +684,7 @@
     el.dataset.label = r.label;
 
     const posKey = (r.part_of_speech || "").toLowerCase().trim();
-    const posHy  = POS_HY[posKey] || r.part_of_speech || "";
+    const posHy  = POS_HY[posKey] || getPosLabel(r.part_of_speech);
     const sylNote= r.syllables_matched > 1 ? ` · ${r.syllables_matched} վանկ` : "";
     const baseNote = (!r.is_base_form && r.base_word && r.base_word !== r.word)
       ? `<div class="chip-base">← ${r.base_word}</div>` : "";
@@ -689,6 +711,30 @@
       fetchRhymes(false);
     }
   });
+
+  function cancelAutoLoad() {
+    if (autoLoadTimer) {
+      clearTimeout(autoLoadTimer);
+      autoLoadTimer = null;
+    }
+  }
+
+  function scheduleAutoLoadIfNeeded() {
+    cancelAutoLoad();
+    autoLoadTimer = setTimeout(() => {
+      autoLoadTimer = null;
+      if (!hasMore || isLoading || !currentWord
+          || resultsSection.style.display === "none") return;
+
+      const doc = document.documentElement;
+      const cannotScroll = doc.scrollHeight <= window.innerHeight + 200;
+      const filtered = getFiltered();
+      if ((activePosFilter && !filtered.length)
+          || (!activePosFilter && cannotScroll)) {
+        fetchRhymes(false);
+      }
+    }, 0);
+  }
 
   /* ─────────────────────────────────────────────────────────────
      UI helpers
