@@ -1,1221 +1,702 @@
 <!doctype html>
-<html lang="hy">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Armenian Rhyme Finder</title>
-        <script
-            src="https://kit.fontawesome.com/7cb58db835.js"
-            crossorigin="anonymous"
-        ></script>
-        <link
-            rel="stylesheet"
-            href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
-            integrity="sha512-Sw24kTx5cDIeEJD7BqXc9E+u6KDAdAm8YGtS+wGGyRyvE4s46HoPazTA/gkGEXLMaLLfi5LEAWuU5Bc3+ay5PA=="
-            crossorigin="anonymous"
-            referrerpolicy="no-referrer"
-        />
-        <style>
-            * {
-                margin: 0;
-                padding: 0;
-                box-sizing: border-box;
-            }
-
-            body {
-                font-family:
-                    "Inter", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-                background: radial-gradient(
-                    120% 120% at 8% 0%,
-                    #cde8ff 0%,
-                    #f3eeff 40%,
-                    #ffffff 78%
-                );
-                min-height: 100vh;
-                padding: 32px 24px 72px;
-                color: #1d1d35;
-            }
-
-            .container {
-                max-width: 960px;
-                margin: 0 auto;
-                display: flex;
-                flex-direction: column;
-                gap: 32px;
-            }
-
-            .top-nav {
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                padding: 16px 24px;
-                border-radius: 24px;
-                background: rgba(255, 255, 255, 0.6);
-                backdrop-filter: blur(18px);
-                border: 1px solid rgba(255, 255, 255, 0.65);
-                box-shadow: 0 25px 55px rgba(124, 110, 255, 0.18);
-            }
-
-            .brand {
-                display: flex;
-                align-items: center;
-                gap: 14px;
-            }
-
-            .brand-icon {
-                width: 44px;
-                height: 44px;
-                display: grid;
-                place-items: center;
-                border-radius: 50%;
-                background: linear-gradient(135deg, #5f6fff 0%, #a951ff 100%);
-                color: #fff;
-                font-size: 1.4rem;
-            }
-
-            .brand-text {
-                display: flex;
-                flex-direction: column;
-                gap: 2px;
-            }
-
-            .brand-title {
-                font-size: 1.05rem;
-                font-weight: 600;
-                color: #1d1d35;
-                letter-spacing: 0.02em;
-            }
-
-            .brand-subtitle {
-                font-size: 0.85rem;
-                color: #6b6b90;
-            }
-
-            .search-section {
-                background: rgba(255, 255, 255, 0.65);
-                padding: 32px;
-                border-radius: 28px;
-                backdrop-filter: blur(18px);
-                border: 1px solid rgba(255, 255, 255, 0.7);
-                box-shadow: 0 45px 95px rgba(124, 110, 255, 0.22);
-                display: flex;
-                flex-direction: column;
-                gap: 20px;
-                position: relative;
-                overflow: visible;
-                z-index: 20;
-            }
-
-            .search-section::before {
-                content: "";
-                position: absolute;
-                inset: 12px;
-                border-radius: 22px;
-                border: 1px solid rgba(255, 255, 255, 0.25);
-                pointer-events: none;
-                z-index: -1;
-            }
-
-            .search-container {
-                display: grid;
-                grid-template-columns: minmax(0, 1.8fr) auto auto;
-                gap: 18px;
-                align-items: end;
-            }
-
-            .input-group {
-                position: relative;
-                display: flex;
-                flex-direction: column;
-                gap: 10px;
-                min-width: 0;
-            }
-
-            .input-group label {
-                font-weight: 400;
-                color: #45456b;
-            }
-
-            .input-group input,
-            .input-group select {
-                width: 100%;
-                padding: 14px 18px;
-                border: 1px solid #dfe4ff;
-                border-radius: 16px;
-                font-size: 1rem;
-                background: rgba(255, 255, 255, 0.85);
-                color: #1d1d35;
-                box-shadow: 0 18px 40px rgba(119, 113, 255, 0.12);
-                transition:
-                    border-color 0.3s ease,
-                    box-shadow 0.3s ease;
-            }
-
-            .input-group input:focus,
-            .input-group select:focus {
-                outline: none;
-                border-color: #5f6fff;
-                box-shadow: 0 22px 45px rgba(109, 103, 255, 0.2);
-            }
-
-            .input-group input::placeholder {
-                color: #9aa0c2;
-            }
-
-            .toggle-group {
-                display: flex;
-                align-items: center;
-                justify-content: flex-end;
-            }
-
-            .toggle {
-                display: inline-flex;
-                align-items: center;
-                gap: 10px;
-                font-weight: 600;
-                color: #45456b;
-                cursor: pointer;
-                user-select: none;
-            }
-
-            .toggle input {
-                width: 20px;
-                height: 20px;
-                accent-color: #5f6fff;
-            }
-
-            .toggle-label {
-                font-size: 0.95rem;
-            }
-
-            .autocomplete-list {
-                position: absolute;
-                top: 100%;
-                left: 0;
-                right: 0;
-                margin-top: 6px;
-                background: rgba(255, 255, 255, 0.95);
-                border: 1px solid rgba(223, 228, 255, 0.9);
-                border-radius: 18px;
-                max-height: 220px;
-                overflow-y: auto;
-                box-shadow: 0 24px 48px rgba(105, 103, 255, 0.18);
-                backdrop-filter: blur(14px);
-                z-index: 1000000;
-            }
-
-            .autocomplete-item {
-                padding: 12px 18px;
-                cursor: pointer;
-                border-bottom: 1px solid rgba(223, 228, 255, 0.6);
-            }
-
-            .autocomplete-item:last-child {
-                border-bottom: none;
-            }
-
-            .autocomplete-item:hover {
-                background-color: rgba(236, 239, 255, 0.65);
-            }
-
-            button {
-                padding: 14px 30px;
-                background: linear-gradient(135deg, #5f6fff 0%, #a951ff 100%);
-                color: #fff;
-                border: none;
-                border-radius: 18px;
-                font-size: 1rem;
-                font-weight: 600;
-                cursor: pointer;
-                display: inline-flex;
-                align-items: center;
-                gap: 10px;
-                box-shadow: 0 18px 40px rgba(111, 108, 255, 0.35);
-                transition:
-                    transform 0.2s ease,
-                    box-shadow 0.2s ease;
-            }
-
-            button:hover {
-                transform: translateY(-3px);
-                box-shadow: 0 22px 45px rgba(111, 108, 255, 0.4);
-            }
-
-            button:active {
-                transform: translateY(-1px);
-            }
-
-            button:focus-visible {
-                outline: 2px solid rgba(95, 111, 255, 0.45);
-                outline-offset: 4px;
-            }
-
-            .button-icon {
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 1.1rem;
-            }
-
-            .loading {
-                display: none;
-                text-align: center;
-                padding: 24px;
-                color: #6b6b90;
-            }
-
-            .loading-inline {
-                display: none;
-                text-align: center;
-                padding: 24px;
-                color: #6b6b90;
-            }
-
-            .loading-inline .spinner {
-                border-color: rgba(95, 111, 255, 0.18);
-                border-top-color: #5f6fff;
-            }
-
-            .loading-inline p {
-                margin-top: 12px;
-            }
-
-            .spinner {
-                border: 3px solid rgba(95, 111, 255, 0.15);
-                border-radius: 50%;
-                border-top: 3px solid #5f6fff;
-                width: 32px;
-                height: 32px;
-                animation: spin 1s linear infinite;
-                margin: 0 auto;
-            }
-
-            @keyframes spin {
-                0% {
-                    transform: rotate(0deg);
-                }
-                100% {
-                    transform: rotate(360deg);
-                }
-            }
-
-            .results-section {
-                display: none;
-                gap: 0;
-            }
-
-            .results-header {
-                background: rgba(255, 255, 255, 0.65);
-                padding: 28px 32px;
-                border-radius: 28px 28px 0 0;
-                border: 1px solid rgba(255, 255, 255, 0.7);
-                backdrop-filter: blur(16px);
-                box-shadow: 0 35px 80px rgba(124, 110, 255, 0.18);
-                display: flex;
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 12px;
-            }
-
-            .result-count {
-                color: #6b6b90;
-                font-size: 1.05rem;
-                margin-top: 0;
-            }
-
-            .filter-group {
-                display: flex;
-                gap: 14px;
-                flex-wrap: wrap;
-                margin-top: 4px;
-            }
-
-            .filter-button {
-                border: none;
-                padding: 10px 22px;
-                border-radius: 999px;
-                background: rgba(255, 255, 255, 0.8);
-                box-shadow: 0 12px 25px rgba(124, 110, 255, 0.15);
-                color: #494b7d;
-                font-weight: 600;
-                cursor: pointer;
-                transition: all 0.2s ease;
-            }
-
-            .filter-button:hover {
-                transform: translateY(-1px);
-                box-shadow: 0 16px 30px rgba(124, 110, 255, 0.2);
-            }
-
-            .filter-button.active {
-                background: linear-gradient(135deg, #3f6df5, #a248ff);
-                color: #ffffff;
-                box-shadow: 0 20px 35px rgba(79, 104, 255, 0.35);
-            }
-
-            .results-container {
-                background: rgba(255, 255, 255, 0.82);
-                border-radius: 0 0 28px 28px;
-                border: 1px solid rgba(255, 255, 255, 0.7);
-                border-top: none;
-                overflow: hidden;
-                box-shadow: 0 45px 95px rgba(124, 110, 255, 0.18);
-            }
-
-            .rhyme-item {
-                padding: 22px 32px;
-                border-bottom: 1px solid rgba(223, 228, 255, 0.6);
-                transition:
-                    background-color 0.2s ease,
-                    transform 0.2s ease;
-            }
-
-            .rhyme-item:last-child {
-                border-bottom: none;
-            }
-
-            .rhyme-item:hover {
-                background-color: rgba(236, 239, 255, 0.55);
-                transform: translateY(-2px);
-            }
-
-            .rhyme-word {
-                font-size: 1.4rem;
-                font-weight: 600;
-                color: #1d1d35;
-                margin-bottom: 10px;
-            }
-
-            .rhyme-meta {
-                display: flex;
-                gap: 14px;
-                margin-bottom: 10px;
-                flex-wrap: wrap;
-                align-items: center;
-            }
-
-            .badge {
-                display: inline-flex;
-                align-items: center;
-                padding: 6px 14px;
-                border-radius: 999px;
-                font-size: 0.85rem;
-                font-weight: 600;
-                backdrop-filter: blur(10px);
-            }
-
-            .badge.perfect {
-                background: rgba(76, 211, 150, 0.2);
-                color: #1b7d5d;
-            }
-
-            .badge.near-perfect {
-                background: rgba(136, 205, 255, 0.25);
-                color: #1f6fad;
-            }
-
-            .badge.assonance {
-                background: rgba(145, 148, 255, 0.25);
-                color: #4346b9;
-            }
-
-            .badge.slant {
-                background: rgba(255, 187, 110, 0.25);
-                color: #b36a14;
-            }
-
-            .score {
-                background: rgba(95, 111, 255, 0.18);
-                color: #3b41b3;
-                padding: 6px 14px;
-                border-radius: 999px;
-                font-weight: 600;
-            }
-
-            .pos {
-                color: #8a8bb2;
-                font-size: 0.9rem;
-            }
-
-            .definition {
-                color: #5c5c7d;
-                font-size: 0.95rem;
-                margin-top: 6px;
-                font-style: italic;
-            }
-
-            .error {
-                background: rgba(255, 255, 255, 0.75);
-                padding: 22px 28px;
-                border-radius: 22px;
-                border-left: 4px solid #ff6b6b;
-                color: #b83232;
-                font-weight: 600;
-                margin-top: 20px;
-                display: none;
-                box-shadow: 0 25px 55px rgba(255, 107, 107, 0.18);
-            }
-
-            .stats {
-                background: rgba(255, 255, 255, 0.55);
-                color: #4c4c7a;
-                padding: 12px 24px;
-                border-radius: 20px;
-                font-size: 0.95rem;
-                text-align: center;
-                margin-top: 10px;
-                border: 1px solid rgba(255, 255, 255, 0.7);
-                backdrop-filter: blur(14px);
-                box-shadow: 0 20px 50px rgba(124, 110, 255, 0.14);
-            }
-
-            .empty-state {
-                text-align: center;
-                padding: 48px 20px;
-                color: #7a7ca7;
-            }
-
-            .empty-state-icon {
-                font-size: 3rem;
-                margin-bottom: 18px;
-                opacity: 0.6;
-            }
-
-            @media (max-width: 900px) {
-                .top-nav {
-                    flex-direction: column;
-                    align-items: flex-start;
-                    gap: 8px;
-                }
-
-                .search-container {
-                    grid-template-columns: 1fr;
-                }
-
-                .toggle-group {
-                    justify-content: flex-start;
-                }
-
-                button {
-                    width: 100%;
-                    justify-content: center;
-                }
-
-                .rhyme-meta {
-                    flex-direction: column;
-                    align-items: flex-start;
-                }
-            }
-
-            @media (max-width: 600px) {
-                body {
-                    padding: 24px 16px 56px;
-                }
-
-                h1 {
-                    font-size: 2.2rem;
-                }
-
-                .search-section {
-                    padding: 24px;
-                }
-
-                .results-header,
-                .results-container {
-                    border-radius: 22px;
-                }
-
-                .rhyme-item {
-                    padding: 20px;
-                }
-            }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <nav class="top-nav">
-                <div class="brand">
-                    <span class="brand-icon"
-                        ><i
-                            class="fa-solid fa-magnifying-glass"
-                            style="color: #ffffff"
-                        ></i
-                    ></span>
-                    <div class="brand-text">
-                        <span class="brand-title">Hangavorum</span>
-                        <span class="brand-subtitle"
-                            >Armenian Rhyme Finder</span
-                        >
-                    </div>
-                </div>
-            </nav>
-
-            <div class="search-section">
-                <div class="search-container">
-                    <div class="input-group">
-                        <label for="wordInput">Փնտրեք հանգավորվող բառեր</label>
-                        <input
-                            type="text"
-                            id="wordInput"
-                            placeholder="Օր. գլուխ, սեր, լույս..."
-                            autocomplete="off"
-                        />
-                        <div
-                            id="autocompleteList"
-                            class="autocomplete-list"
-                        ></div>
-                    </div>
-
-                    <div class="toggle-group">
-                        <label class="toggle">
-                            <input type="checkbox" id="includeTenses" />
-                            <span class="toggle-label"
-                                >Ներառել խոնարհումներ</span
-                            >
-                        </label>
-                    </div>
-
-                    <button id="searchBtn">
-                        <span class="button-icon"
-                            ><i
-                                class="fa-solid fa-magnifying-glass"
-                                style="color: #ffffff"
-                            ></i></span
-                        >Որոնել
-                    </button>
-                </div>
-            </div>
-
-            <div class="loading" id="loading">
-                <div class="spinner"></div>
-                <p>Որոնում...</p>
-            </div>
-
-            <div class="error" id="error"></div>
-
-            <div class="results-section" id="resultsSection">
-                <div class="results-header">
-                    <h2>Արդյունքներ</h2>
-                    <p class="result-count" id="resultCount"></p>
-                    <div class="filter-group" id="posFilters">
-                        <button
-                            type="button"
-                            class="filter-button"
-                            data-filter="noun"
-                        >
-                            Noun
-                        </button>
-                        <button
-                            type="button"
-                            class="filter-button"
-                            data-filter="verb"
-                        >
-                            Verb
-                        </button>
-                        <button
-                            type="button"
-                            class="filter-button"
-                            data-filter="adjective"
-                        >
-                            Adjective
-                        </button>
-                        <button
-                            type="button"
-                            class="filter-button"
-                            data-filter="adverb"
-                        >
-                            Adverb
-                        </button>
-                        <button
-                            type="button"
-                            class="filter-button"
-                            data-filter="name"
-                        >
-                            Name
-                        </button>
-                        <button
-                            type="button"
-                            class="filter-button"
-                            data-filter="pronoun"
-                        >
-                            Pronoun
-                        </button>
-                    </div>
-                </div>
-                <div class="results-container" id="resultsContainer"></div>
-                <div class="loading-inline" id="loadingMore">
-                    <div class="spinner"></div>
-                    <p>Ավելացնում է արդյունքները...</p>
-                </div>
-            </div>
-
-            <div class="stats" id="stats"></div>
-        </div>
-
-        <script>
-            const API_URL = window.location.origin + "/api";
-            const PAGE_SIZE = 50;
-
-            let debounceTimer;
-            let currentWord = "";
-            let includeTenses = false;
-            let offset = 0;
-            let hasMore = false;
-            let isLoading = false;
-
-            let rhymesCache = [];
-
-            let totalResults = 0;
-
-            let renderedRhymesCount = 0;
-
-            const wordInput = document.getElementById("wordInput");
-
-            const autocompleteList =
-                document.getElementById("autocompleteList");
-            const includeTensesCheckbox =
-                document.getElementById("includeTenses");
-            const searchBtn = document.getElementById("searchBtn");
-            const resultsSection = document.getElementById("resultsSection");
-            const resultsContainer =
-                document.getElementById("resultsContainer");
-            const resultCount = document.getElementById("resultCount");
-            const statsEl = document.getElementById("stats");
-            const loadingMore = document.getElementById("loadingMore");
-            const loading = document.getElementById("loading");
-            const errorDiv = document.getElementById("error");
-            const posFilterButtons =
-                document.querySelectorAll(".filter-button");
-            const FILTER_LABELS = {
-                noun: "Noun",
-                verb: "Verb",
-                adjective: "Adjective",
-                adverb: "Adverb",
-                name: "Name",
-                pronoun: "Pronoun",
-            };
-            const FILTER_MAP = {
-                noun: ["noun", "common noun"],
-                verb: ["verb"],
-                adjective: ["adjective"],
-                adverb: ["adverb"],
-                name: ["proper noun", "name", "given name", "surname"],
-                pronoun: ["pronoun"],
-            };
-            const POS_ALIAS_MAP = {
-                n: "noun",
-                noun: "noun",
-                nouns: "noun",
-                nominal: "noun",
-                v: "verb",
-                vb: "verb",
-                verb: "verb",
-                verbs: "verb",
-                adj: "adjective",
-                adjective: "adjective",
-                adjectives: "adjective",
-                adv: "adverb",
-                adverb: "adverb",
-                adverbs: "adverb",
-                pron: "pronoun",
-                pronoun: "pronoun",
-                pronouns: "pronoun",
-                name: "name",
-                names: "name",
-                proper: "proper noun",
-                "proper noun": "proper noun",
-                "proper nouns": "proper noun",
-                "common noun": "common noun",
-                "common nouns": "common noun",
-                "given name": "given name",
-                "given names": "given name",
-                surname: "surname",
-            };
-            const POS_MULTIWORD_PATTERNS = [
-                { pattern: /\bproper\s+nouns?\b/g, replacement: "proper noun" },
-                { pattern: /\bcommon\s+nouns?\b/g, replacement: "common noun" },
-                { pattern: /\bgiven\s+name\b/g, replacement: "given name" },
-                { pattern: /\bsur\s*name\b/g, replacement: "surname" },
-            ];
-            let activePosFilter = null;
-
-            document.addEventListener("DOMContentLoaded", async () => {
-                try {
-                    const response = await fetch(`${API_URL}/stats`);
-                    const data = await response.json();
-                    if (statsEl) {
-                        statsEl.innerHTML = `📚 Բառարան՝ ${data.total_words.toLocaleString()} բառ`;
-                    }
-                } catch (e) {
-                    console.error("Error loading stats:", e);
-                }
-            });
-
-            posFilterButtons.forEach((button) => {
-                button.addEventListener("click", () => {
-                    const { filter } = button.dataset;
-                    activePosFilter =
-                        activePosFilter === filter ? null : filter;
-                    updateFilterButtons();
-                    if (!currentWord || rhymesCache.length === 0) {
-                        return;
-                    }
-
-                    renderResults({
-                        word: currentWord,
-
-                        total: totalResults || rhymesCache.length,
-
-                        forceRefresh: true,
-                    });
-                });
-            });
-
-            updateFilterButtons();
-
-            // Autocomplete functionality
-            wordInput.addEventListener("input", (e) => {
-                clearTimeout(debounceTimer);
-                const query = e.target.value.trim();
-
-                if (query.length < 1) {
-                    autocompleteList.innerHTML = "";
-                    return;
-                }
-
-                debounceTimer = setTimeout(async () => {
-                    try {
-                        const response = await fetch(
-                            `${API_URL}/search?q=${encodeURIComponent(query)}`,
-                        );
-                        const data = await response.json();
-
-                        if (data.results.length > 0) {
-                            autocompleteList.innerHTML = data.results
-                                .map(
-                                    (result) => `
-                            <div class="autocomplete-item" onclick="selectWord('${result.word.replace(/'/g, "\\'")}')">
-                                <strong>${result.word}</strong><br>
-                                <span style="color: #999; font-size: 0.85em;">${result.pos} - ${result.definition}</span>
-                            </div>
-                        `,
-                                )
-                                .join("");
-                        } else {
-                            autocompleteList.innerHTML = "";
-                        }
-                    } catch (e) {
-                        console.error("Error in autocomplete:", e);
-                    }
-                }, 300);
-            });
-
-            function selectWord(word) {
-                wordInput.value = word;
-                autocompleteList.innerHTML = "";
-                finalizeInput();
-                search();
-            }
-
-            function finalizeInput() {
-                if (typeof wordInput.blur === "function") {
-                    wordInput.blur();
-                }
-                const activeElement = document.activeElement;
-                if (
-                    activeElement &&
-                    activeElement !== wordInput &&
-                    typeof activeElement.blur === "function"
-                ) {
-                    activeElement.blur();
-                }
-            }
-
-            wordInput.addEventListener("keydown", (e) => {
-                if (e.key === "Enter") {
-                    e.preventDefault();
-
-                    autocompleteList.innerHTML = "";
-                    finalizeInput();
-
-                    search();
-                }
-            });
-
-            searchBtn.addEventListener("click", () => {
-                finalizeInput();
-                search();
-            });
-
-            async function search() {
-                const word = wordInput.value.trim();
-
-                if (!word) {
-                    showError("Please enter a word");
-                    return;
-                }
-
-                includeTenses = includeTensesCheckbox.checked;
-                currentWord = word;
-                offset = 0;
-                hasMore = false;
-                rhymesCache = [];
-                renderedRhymesCount = 0;
-                totalResults = 0;
-                resultsSection.style.display = "none";
-                toggleLoadingMore(false);
-                hideError();
-
-                await fetchRhymes(true);
-            }
-
-            async function fetchRhymes(reset = false) {
-                if (isLoading || !currentWord) {
-                    return;
-                }
-
-                isLoading = true;
-                if (reset) {
-                    showLoading(true);
-                } else {
-                    toggleLoadingMore(true);
-                }
-
-                try {
-                    const params = new URLSearchParams({
-                        word: currentWord,
-                        limit: PAGE_SIZE,
-                        offset: offset,
-                        include_tenses: includeTenses,
-                    });
-                    const response = await fetch(
-                        `${API_URL}/rhymes?${params.toString()}`,
-                    );
-
-                    if (!response.ok) {
-                        throw new Error("Network response was not ok");
-                    }
-
-                    const data = await response.json();
-                    const newRhymes = (data.rhymes || []).map(
-                        enhanceRhymeEntry,
-                    );
-
-                    totalResults = data.total ?? newRhymes.length;
-                    hasMore =
-                        data.has_more !== undefined
-                            ? data.has_more
-                            : rhymesCache.length + newRhymes.length <
-                              totalResults;
-                    offset += newRhymes.length;
-
-                    if (reset) {
-                        resultsContainer.innerHTML = "";
-                        rhymesCache = [...newRhymes];
-                    } else {
-                        rhymesCache = rhymesCache.concat(newRhymes);
-                    }
-
-                    renderResults({
-                        word: data.word,
-
-                        total: totalResults,
-
-                        reset,
-                    });
-                } catch (error) {
-                    showError("Error searching for rhymes: " + error.message);
-                } finally {
-                    if (reset) {
-                        showLoading(false);
-                    } else {
-                        toggleLoadingMore(false);
-                    }
-                    isLoading = false;
-                }
-            }
-
-            function updateFilterButtons() {
-                posFilterButtons.forEach((button) => {
-                    button.classList.toggle(
-                        "active",
-                        button.dataset.filter === activePosFilter,
-                    );
-                });
-            }
-
-            function getFilteredRhymes() {
-                if (!activePosFilter) {
-                    return [...rhymesCache];
-                }
-
-                return rhymesCache.filter((rhyme) => {
-                    const normalizedPos =
-                        rhyme.normalized_part_of_speech ??
-                        normalizePartOfSpeech(rhyme.part_of_speech);
-                    rhyme.normalized_part_of_speech = normalizedPos;
-                    return matchesFilter(normalizedPos, activePosFilter);
-                });
-            }
-
-            function normalizePartOfSpeech(partOfSpeech) {
-                if (!partOfSpeech) {
-                    return "";
-                }
-
-                let normalized = partOfSpeech
-                    .normalize("NFKD")
-                    .toLowerCase()
-                    .replace(/[\u0300-\u036f]/g, "")
-                    .replace(/[_•·]/g, " ")
-                    .replace(/[\u2013\u2014]/g, " ")
-                    .replace(/-/g, " ")
-                    .replace(/\./g, " ")
-                    .replace(/&/g, " and ")
-                    .replace(/\s+/g, " ")
-                    .trim();
-
-                if (!normalized) {
-                    return "";
-                }
-
-                const tags = new Set();
-
-                POS_MULTIWORD_PATTERNS.forEach(({ pattern, replacement }) => {
-                    const matches = normalized.match(pattern);
-                    if (matches) {
-                        tags.add(replacement);
-                        normalized = normalized.replace(pattern, " ");
-                    }
-                });
-
-                normalized = normalized.replace(/\s+/g, " ").trim();
-
-                if (normalized) {
-                    normalized
-                        .split(/[\s,;:/()]+/)
-                        .map((token) => POS_ALIAS_MAP[token] || token)
-                        .filter((token) => token && token !== "and")
-                        .forEach((token) => tags.add(token));
-                }
-
-                return Array.from(tags).join(" ");
-            }
-
-            function matchesFilter(normalizedPos, filterKey) {
-                if (!normalizedPos) {
-                    return false;
-                }
-
-                if (
-                    filterKey === "noun" &&
-                    hasTag(normalizedPos, "proper noun")
-                ) {
-                    return false;
-                }
-
-                return FILTER_MAP[filterKey].some((tag) =>
-                    hasTag(normalizedPos, tag),
-                );
-            }
-
-            function hasTag(normalized, tag) {
-                const pattern = new RegExp(
-                    `(^|[\\s,;:/\\-()])${escapeRegExp(tag)}(?=$|[\\s,;:/\\-()])`,
-                );
-                return pattern.test(normalized);
-            }
-
-            function escapeRegExp(value) {
-                return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-            }
-
-            function enhanceRhymeEntry(rhyme) {
-                return {
-                    ...rhyme,
-                    normalized_part_of_speech: normalizePartOfSpeech(
-                        rhyme.part_of_speech,
-                    ),
-                };
-            }
-
-            function renderResults({
-                word,
-                total,
-                reset = false,
-                forceRefresh = false,
-            }) {
-                if (!rhymesCache.length) {
-                    resultCount.textContent = `No rhymes found for "${word}"`;
-
-                    resultsContainer.innerHTML = `
-
-                    <div class="empty-state">
-
-                        <div class="empty-state-icon">🔍</div>
-
-                        <p>No rhymes found for "${word}"</p>
-
-                    </div>
-
-                `;
-
-                    resultsSection.style.display = "block";
-
-                    renderedRhymesCount = 0;
-                    return;
-                }
-
-                if (reset || forceRefresh) {
-                    resultsContainer.innerHTML = "";
-                    renderedRhymesCount = 0;
-                }
-
-                const filteredRhymes = getFilteredRhymes();
-
-                if (!filteredRhymes.length) {
-                    const filterLabel =
-                        FILTER_LABELS[activePosFilter] || "selected";
-                    const filterLabelLower = filterLabel.toLowerCase();
-                    resultCount.textContent = `No ${filterLabelLower} rhymes found for "${word}"`;
-                    resultsContainer.innerHTML = `
-                    <div class="empty-state">
-
-                        <div class="empty-state-icon">🔍</div>
-
-                        <p>No ${filterLabelLower} rhymes found for "${word}"</p>
-
-                    </div>
-
-                `;
-
-                    resultsSection.style.display = "block";
-
-                    renderedRhymesCount = 0;
-                    return;
-                }
-
-                const overallTotalCount =
-                    total && total > 0 ? total : rhymesCache.length;
-
-                const filteredTotalCount = filteredRhymes.length;
-
-                const filterSuffix = activePosFilter
-                    ? ` (${FILTER_LABELS[activePosFilter]})`
-                    : "";
-
-                const filterDetails = activePosFilter
-                    ? ` • Filtered total: ${filteredTotalCount.toLocaleString()}`
-                    : "";
-
-                resultCount.textContent = `Showing ${filteredRhymes.length.toLocaleString()} of ${overallTotalCount.toLocaleString()} rhymes for "${word}"${filterSuffix}${filterDetails}`;
-
-                const itemsToRender =
-                    reset || forceRefresh
-                        ? filteredRhymes
-                        : filteredRhymes.slice(renderedRhymesCount);
-
-                if (itemsToRender.length) {
-                    const itemsHtml = itemsToRender
-                        .map(createRhymeMarkup)
-
-                        .join("");
-
-                    if (reset || forceRefresh) {
-                        resultsContainer.innerHTML = itemsHtml;
-                    } else {
-                        resultsContainer.insertAdjacentHTML(
-                            "beforeend",
-                            itemsHtml,
-                        );
-                    }
-                }
-
-                renderedRhymesCount = filteredRhymes.length;
-                resultsSection.style.display = "block";
-            }
-
-            function createRhymeMarkup(rhyme) {
-                const formIndicator = !rhyme.is_base_form
-                    ? ' <span style="color: #999; font-size: 0.85em;">(տ)</span>'
-                    : "";
-                const baseWord =
-                    rhyme.base_word && rhyme.word !== rhyme.base_word
-                        ? `<span style="color: #999; font-size: 0.85em; margin-left: 10px;">← ${rhyme.base_word}</span>`
-                        : "";
-                const syllableBadge =
-                    rhyme.syllables_matched > 1
-                        ? `<span class="score" style="color: #28a745;">🎵 ${rhyme.syllables_matched} syllables</span>`
-                        : "";
-
-                return `
-                <div class="rhyme-item">
-                    <div class="rhyme-word">
-                        ${rhyme.word}${formIndicator}
-                        ${baseWord}
-                    </div>
-                    <div class="rhyme-meta">
-                        <span class="badge ${rhyme.label}">${rhyme.label}</span>
-                        <span class="score">Similarity: ${(rhyme.similarity * 100).toFixed(1)}%</span>
-                        ${syllableBadge}
-                        <span class="pos">${rhyme.part_of_speech}</span>
-                    </div>
-                    <div class="definition">📖 ${rhyme.definition}</div>
-                </div>
-            `;
-            }
-
-            function handleInfiniteScroll() {
-                if (
-                    !hasMore ||
-                    isLoading ||
-                    !currentWord ||
-                    resultsSection.style.display === "none"
-                ) {
-                    return;
-                }
-
-                const scrolledToBottom =
-                    window.innerHeight + window.scrollY >=
-                    document.body.offsetHeight - 200;
-                if (scrolledToBottom) {
-                    fetchRhymes(false);
-                }
-            }
-
-            function toggleLoadingMore(show) {
-                if (loadingMore) {
-                    loadingMore.style.display = show ? "block" : "none";
-                }
-            }
-
-            function showLoading(show) {
-                if (loading) {
-                    loading.style.display = show ? "block" : "none";
-                }
-            }
-
-            function showError(message) {
-                if (errorDiv) {
-                    errorDiv.textContent = message;
-                    errorDiv.style.display = "block";
-                }
-            }
-
-            function hideError() {
-                if (errorDiv) {
-                    errorDiv.style.display = "none";
-                }
-            }
-
-            window.addEventListener("scroll", handleInfiniteScroll);
-
-            // Close autocomplete when clicking outside
-            document.addEventListener("click", (e) => {
-                if (e.target !== wordInput) {
-                    autocompleteList.innerHTML = "";
-                }
-            });
-        </script>
-    </body>
+<html lang="hy" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Հանգավորում · Հայերեն հանգերի որոնիչ</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Armenian:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Tokens ── */
+    :root {
+      --bg:      #f6efe3;
+      --surf:    #fffdf9;
+      --ink:     #1c1710;
+      --soft:    #796f5f;
+      --line:    #e3d8c5;
+      --acc:     #d4622e;
+      --acc-h:   #be5526;
+      --q-perfect:  #d4622e;
+      --q-near:     #3a5e96;
+      --q-asson:    #8a4a82;
+      --q-slant:    #9a7a26;
+    }
+    [data-theme="dark"] {
+      --bg:      #15110b;
+      --surf:    #1e1810;
+      --ink:     #f3ead9;
+      --soft:    #a0937e;
+      --line:    #322a1d;
+      --acc:     #ef7d44;
+      --acc-h:   #da6e39;
+      --q-perfect:  #ef7d44;
+      --q-near:     #6f93cc;
+      --q-asson:    #bd84b5;
+      --q-slant:    #cfa847;
+    }
+
+    /* ── Base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: "Noto Sans Armenian", sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+    .mono { font-family: "JetBrains Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
+    /* ── Layout ── */
+    .app { max-width: 1120px; margin: 0 auto; padding: 36px 48px 80px; }
+
+    /* ── Top bar ── */
+    .top-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 36px; }
+    .brand { display: flex; align-items: center; gap: 11px; }
+    .brand-icon {
+      width: 32px; height: 32px; border-radius: 7px;
+      background: var(--acc); display: grid; place-items: center;
+      color: #fff; font-size: 17px; font-weight: 800; line-height: 1;
+    }
+    .brand-name { font-size: 19px; font-weight: 800; letter-spacing: -.4px; }
+    .theme-btn {
+      border: 1.5px solid var(--line); background: var(--surf); color: var(--soft);
+      font-family: inherit; font-size: 13px; font-weight: 700;
+      padding: 7px 18px; border-radius: 999px; cursor: pointer; transition: .15s;
+    }
+    .theme-btn:hover { border-color: var(--acc); color: var(--acc); }
+
+    /* ── Search ── */
+    .search-wrap { position: relative; }
+    .search-box {
+      display: flex; align-items: stretch; gap: 0;
+      background: var(--surf); border: 2px solid var(--ink);
+      border-radius: 16px; overflow: hidden;
+      box-shadow: 6px 6px 0 var(--ink);
+      transition: box-shadow .15s;
+    }
+    .search-box:focus-within { box-shadow: 8px 8px 0 var(--ink); }
+    #wordInput {
+      flex: 1; border: none; background: transparent;
+      color: var(--ink); font-family: inherit;
+      font-size: 24px; font-weight: 700;
+      padding: 20px 24px; outline: none; min-width: 0;
+    }
+    #wordInput::placeholder { color: var(--soft); font-weight: 500; }
+    #searchBtn {
+      border: none; background: var(--acc); color: #fff;
+      font-family: inherit; font-weight: 800; font-size: 17px;
+      padding: 0 38px; cursor: pointer; white-space: nowrap;
+      transition: background .15s;
+    }
+    #searchBtn:hover { background: var(--acc-h); }
+
+    /* Autocomplete */
+    #autocompleteList {
+      position: absolute; top: 100%; left: 0; right: 0; margin-top: 10px;
+      background: var(--surf); border: 2px solid var(--ink); border-radius: 14px;
+      overflow: hidden; z-index: 100; box-shadow: 6px 6px 0 var(--ink);
+    }
+    .autocomplete-item {
+      display: flex; align-items: baseline; gap: 10px;
+      padding: 13px 22px; cursor: pointer; border-bottom: 1px solid var(--line);
+    }
+    .autocomplete-item:last-child { border-bottom: none; }
+    .autocomplete-item:hover { background: var(--bg); }
+    .autocomplete-item strong { font-size: 18px; font-weight: 800; }
+    .autocomplete-item span { font-size: 12.5px; color: var(--soft); }
+
+    /* Conjugations toggle */
+    .conj-row {
+      display: flex; align-items: center; gap: 10px;
+      margin-top: 18px; cursor: pointer; width: fit-content; user-select: none;
+    }
+    .conj-row input[type="checkbox"] { display: none; }
+    .sw {
+      width: 38px; height: 22px; border-radius: 999px;
+      background: var(--line); position: relative;
+      border: 1.5px solid var(--ink); transition: .18s; flex-shrink: 0;
+    }
+    .sw::after {
+      content: ""; position: absolute; top: 2px; left: 2px;
+      width: 14px; height: 14px; border-radius: 50%;
+      background: var(--ink); transition: .18s;
+    }
+    #includeTenses:checked ~ .conj-row .sw,
+    .sw.on { background: var(--acc); }
+    .sw.on::after { transform: translateX(16px); background: #fff; }
+    .conj-row span { font-size: 14px; color: var(--soft); font-weight: 600; }
+
+    /* ── Loading ── */
+    .spinner-wrap { display: flex; justify-content: center; padding: 80px 0; }
+    .spinner {
+      width: 32px; height: 32px;
+      border: 3px solid var(--line); border-top-color: var(--acc);
+      border-radius: 50%; animation: spin .9s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner-inline { display: flex; justify-content: center; padding: 32px 0; }
+
+    /* ── Error ── */
+    .error-msg {
+      background: var(--surf); border: 2px solid var(--ink);
+      border-left: 5px solid #c94040;
+      padding: 18px 22px; border-radius: 12px;
+      color: #c94040; font-weight: 700; margin-top: 28px;
+      box-shadow: 4px 4px 0 var(--line);
+    }
+
+    /* ── Results ── */
+    /* Hero: big query word */
+    .results-hero {
+      margin-top: 54px;
+      display: flex; align-items: flex-end; gap: 24px; flex-wrap: wrap;
+    }
+    .hero-kick {
+      font-size: 13px; font-weight: 800; letter-spacing: .22em;
+      text-transform: uppercase; color: var(--acc); margin-bottom: 10px;
+    }
+    .hero-word {
+      font-size: 92px; font-weight: 800; letter-spacing: -2px;
+      line-height: .9; color: var(--ink);
+    }
+    .hero-meta { padding-bottom: 14px; }
+    #resultCount { font-size: 15px; color: var(--soft); font-weight: 600; }
+    #resultCount b { color: var(--acc); }
+
+    /* POS filter pills */
+    .filter-group {
+      margin-top: 32px; display: flex; flex-wrap: wrap; gap: 8px;
+    }
+    .filter-button {
+      border: 1.5px solid var(--ink); background: transparent;
+      color: var(--ink); font-family: inherit; font-weight: 700;
+      font-size: 13px; padding: 8px 16px; border-radius: 999px;
+      cursor: pointer; transition: .13s;
+    }
+    .filter-button:hover { background: var(--ink); color: var(--bg); }
+    .filter-button.active {
+      background: var(--acc); border-color: var(--acc); color: #fff;
+    }
+
+    /* Chip grid */
+    #resultsContainer {
+      margin-top: 24px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
+      gap: 12px;
+    }
+
+    /* Individual chip */
+    .rhyme-chip {
+      background: var(--surf); border: 1.5px solid var(--line);
+      border-radius: 13px; padding: 15px 16px 14px;
+      position: relative; overflow: hidden;
+      transition: transform .14s, box-shadow .14s, border-color .14s;
+      cursor: default;
+    }
+    .rhyme-chip::before {
+      content: ""; position: absolute;
+      left: 0; top: 0; bottom: 0; width: 5px;
+      background: var(--qc, var(--soft));
+    }
+    .rhyme-chip:hover {
+      transform: translate(-2px, -2px);
+      box-shadow: 5px 5px 0 var(--ink);
+      border-color: var(--ink);
+    }
+    .rhyme-chip[data-label="perfect"]     { --qc: var(--q-perfect); }
+    .rhyme-chip[data-label="near-perfect"]{ --qc: var(--q-near);    }
+    .rhyme-chip[data-label="assonance"]   { --qc: var(--q-asson);   }
+    .rhyme-chip[data-label="slant"]       { --qc: var(--q-slant);   }
+
+    .chip-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+    .chip-word { font-size: 25px; font-weight: 800; letter-spacing: -.5px; line-height: 1; }
+    .chip-sim  { font-size: 15px; font-weight: 700; color: var(--qc, var(--soft)); }
+    .chip-label {
+      margin-top: 10px;
+      font-size: 10.5px; font-weight: 800; letter-spacing: .04em;
+      text-transform: uppercase; color: var(--qc, var(--soft));
+    }
+    .chip-pos  { font-size: 12px; color: var(--soft); margin-top: 7px; font-weight: 600; }
+    .chip-def  {
+      font-size: 12px; color: var(--soft); margin-top: 6px; line-height: 1.4;
+      display: -webkit-box; -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .chip-base {
+      font-size: 11px; color: var(--soft); margin-top: 5px;
+      opacity: .7; font-style: italic;
+    }
+
+    /* Empty state */
+    .empty-state {
+      grid-column: 1 / -1; text-align: center;
+      padding: 60px 20px; color: var(--soft);
+    }
+    .empty-state p { font-size: 16px; font-weight: 600; margin-top: 12px; }
+
+    /* Load more / inline spinner */
+    #loadingMore { display: none; }
+    .inline-spinner-wrap { display: flex; justify-content: center; padding: 32px 0; }
+    .inline-spinner {
+      width: 26px; height: 26px;
+      border: 2.5px solid var(--line); border-top-color: var(--acc);
+      border-radius: 50%; animation: spin .9s linear infinite;
+    }
+
+    /* Stats footer */
+    #stats {
+      margin-top: 40px; text-align: center;
+      font-size: 12.5px; color: var(--soft); font-weight: 600;
+    }
+
+    /* Responsive */
+    @media (max-width: 700px) {
+      .app { padding: 24px 20px 60px; }
+      #wordInput { font-size: 18px; padding: 16px 18px; }
+      #searchBtn { padding: 0 22px; font-size: 15px; }
+      .hero-word { font-size: 60px; }
+      .results-hero { margin-top: 40px; }
+      #resultsContainer { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Top bar -->
+  <header class="top-bar">
+    <div class="brand">
+      <div class="brand-icon">Հ</div>
+      <span class="brand-name">Հանգավորում</span>
+    </div>
+    <button class="theme-btn" id="themeBtn">Մութ</button>
+  </header>
+
+  <!-- Search -->
+  <div class="search-wrap">
+    <div class="search-box">
+      <input type="text" id="wordInput"
+        placeholder="Օր.՝ սեր, լույս, գարուն…"
+        autocomplete="off" />
+      <button id="searchBtn">Որոնել</button>
+    </div>
+    <div id="autocompleteList" style="display:none;"></div>
+  </div>
+
+  <!-- Conjugations toggle -->
+  <label class="conj-row" id="conjRow">
+    <input type="checkbox" id="includeTenses" />
+    <span class="sw" id="conjSw"></span>
+    <span>Ներառել խոնարհումներ</span>
+  </label>
+
+  <!-- Main loading spinner -->
+  <div id="loading" class="spinner-wrap" style="display:none;">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- Error -->
+  <div id="error" class="error-msg" style="display:none;"></div>
+
+  <!-- Results section -->
+  <div id="resultsSection" style="display:none;">
+    <div class="results-hero">
+      <div>
+        <div class="hero-kick">ՀԱՅԵՐԵՆ ՀԱՆԳԵՐԻ ՈՐՈՆԻՉ</div>
+        <div class="hero-word" id="heroWord"></div>
+      </div>
+      <div class="hero-meta">
+        <div id="resultCount"></div>
+      </div>
+    </div>
+
+    <!-- POS filters -->
+    <div class="filter-group" id="posFilters">
+      <button class="filter-button" data-filter="noun">գոյական</button>
+      <button class="filter-button" data-filter="verb">բայ</button>
+      <button class="filter-button" data-filter="adjective">ածական</button>
+      <button class="filter-button" data-filter="adverb">մակբայ</button>
+      <button class="filter-button" data-filter="name">հատուկ անուն</button>
+      <button class="filter-button" data-filter="pronoun">դերանուն</button>
+    </div>
+
+    <!-- Chip grid -->
+    <div id="resultsContainer"></div>
+
+    <!-- Inline "loading more" spinner -->
+    <div id="loadingMore">
+      <div class="inline-spinner-wrap"><div class="inline-spinner"></div></div>
+    </div>
+  </div>
+
+  <!-- Dictionary stats footer -->
+  <div id="stats"></div>
+
+</div>
+
+<script>
+  /* ─────────────────────────────────────────────────────────────
+     Config & constants
+  ───────────────────────────────────────────────────────────── */
+  const API_URL   = window.location.origin + "/api";
+  const PAGE_SIZE = 50;
+
+  const LABEL_HY = {
+    perfect:       "Կատարյալ",
+    "near-perfect":"Մոտավոր",
+    assonance:     "Համահնչյուն",
+    slant:         "Թերի",
+  };
+
+  const POS_HY = {
+    noun: "գոյական", verb: "բայ", adjective: "ածական",
+    adverb: "մակբայ", pronoun: "դերանուն", name: "հատուկ անուն",
+    "common noun": "գոյական", "proper noun": "հատուկ անուն",
+    "given name": "հատուկ անուն", surname: "հատուկ անուն",
+  };
+
+  // Part-of-speech filter map (same logic as original)
+  const FILTER_MAP = {
+    noun:      ["noun","common noun"],
+    verb:      ["verb"],
+    adjective: ["adjective"],
+    adverb:    ["adverb"],
+    name:      ["proper noun","name","given name","surname"],
+    pronoun:   ["pronoun"],
+  };
+  const POS_ALIAS_MAP = {
+    n:"noun",noun:"noun",v:"verb",vb:"verb",verb:"verb",
+    adj:"adjective",adjective:"adjective",adv:"adverb",adverb:"adverb",
+    pron:"pronoun",pronoun:"pronoun",name:"name",
+    "proper noun":"proper noun","common noun":"common noun",
+    "given name":"given name",surname:"surname",
+  };
+  const POS_MULTI = [
+    {pattern:/\bproper\s+nouns?\b/g,  replacement:"proper noun"},
+    {pattern:/\bcommon\s+nouns?\b/g,  replacement:"common noun"},
+    {pattern:/\bgiven\s+name\b/g,     replacement:"given name"},
+    {pattern:/\bsur\s*name\b/g,       replacement:"surname"},
+  ];
+
+  /* ─────────────────────────────────────────────────────────────
+     State
+  ───────────────────────────────────────────────────────────── */
+  let debounceTimer;
+  let currentWord    = "";
+  let includeTenses  = false;
+  let offset         = 0;
+  let hasMore        = false;
+  let isLoading      = false;
+  let rhymesCache    = [];
+  let totalResults   = 0;
+  let renderedCount  = 0;
+  let activePosFilter= null;
+
+  /* ─────────────────────────────────────────────────────────────
+     DOM refs
+  ───────────────────────────────────────────────────────────── */
+  const wordInput        = document.getElementById("wordInput");
+  const autocompleteList = document.getElementById("autocompleteList");
+  const includeTensesChk = document.getElementById("includeTenses");
+  const conjSw           = document.getElementById("conjSw");
+  const searchBtn        = document.getElementById("searchBtn");
+  const resultsSection   = document.getElementById("resultsSection");
+  const resultsContainer = document.getElementById("resultsContainer");
+  const resultCount      = document.getElementById("resultCount");
+  const heroWord         = document.getElementById("heroWord");
+  const statsEl          = document.getElementById("stats");
+  const loadingMore      = document.getElementById("loadingMore");
+  const loading          = document.getElementById("loading");
+  const errorDiv         = document.getElementById("error");
+  const posFilterBtns    = document.querySelectorAll(".filter-button");
+  const themeBtn         = document.getElementById("themeBtn");
+
+  /* ─────────────────────────────────────────────────────────────
+     Theme
+  ───────────────────────────────────────────────────────────── */
+  (function initTheme() {
+    const saved = localStorage.getItem("hangavorum-theme") || "light";
+    document.documentElement.setAttribute("data-theme", saved);
+    themeBtn.textContent = saved === "dark" ? "Լույս" : "Մութ";
+  })();
+
+  themeBtn.addEventListener("click", () => {
+    const next = document.documentElement.getAttribute("data-theme") === "dark"
+      ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    localStorage.setItem("hangavorum-theme", next);
+    themeBtn.textContent = next === "dark" ? "Լույս" : "Մութ";
+  });
+
+  /* ─────────────────────────────────────────────────────────────
+     Conjugations switch visual sync
+  ───────────────────────────────────────────────────────────── */
+  includeTensesChk.addEventListener("change", () => {
+    conjSw.classList.toggle("on", includeTensesChk.checked);
+  });
+  document.getElementById("conjRow").addEventListener("click", () => {
+    // label wraps checkbox, so click already toggles — just sync visual
+    setTimeout(() => conjSw.classList.toggle("on", includeTensesChk.checked), 0);
+  });
+
+  /* ─────────────────────────────────────────────────────────────
+     Stats on load
+  ───────────────────────────────────────────────────────────── */
+  document.addEventListener("DOMContentLoaded", async () => {
+    try {
+      const r = await fetch(`${API_URL}/stats`);
+      const d = await r.json();
+      statsEl.textContent = `Բառարան · ${d.total_words.toLocaleString("hy")} բառ`;
+    } catch (_) { /* backend not reachable in preview */ }
+  });
+
+  /* ─────────────────────────────────────────────────────────────
+     Autocomplete
+  ───────────────────────────────────────────────────────────── */
+  wordInput.addEventListener("input", (e) => {
+    clearTimeout(debounceTimer);
+    const q = e.target.value.trim();
+    if (!q) { hideAutocomplete(); return; }
+    debounceTimer = setTimeout(async () => {
+      try {
+        const r = await fetch(`${API_URL}/search?q=${encodeURIComponent(q)}`);
+        const d = await r.json();
+        if (d.results.length) {
+          autocompleteList.innerHTML = d.results.map((item) =>
+            `<div class="autocomplete-item" onclick="selectWord('${item.word.replace(/'/g,"\\'")}')">
+              <strong>${item.word}</strong>
+              <span>${item.pos ? item.pos + " · " : ""}${item.definition || ""}</span>
+            </div>`
+          ).join("");
+          autocompleteList.style.display = "block";
+        } else { hideAutocomplete(); }
+      } catch (e) { console.error(e); }
+    }, 300);
+  });
+
+  function hideAutocomplete() {
+    autocompleteList.innerHTML = "";
+    autocompleteList.style.display = "none";
+  }
+
+  window.selectWord = function(word) {
+    wordInput.value = word;
+    hideAutocomplete();
+    wordInput.blur();
+    search();
+  };
+
+  wordInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); hideAutocomplete(); search(); }
+  });
+  document.addEventListener("click", (e) => {
+    if (e.target !== wordInput) hideAutocomplete();
+  });
+
+  /* ─────────────────────────────────────────────────────────────
+     Search entry point
+  ───────────────────────────────────────────────────────────── */
+  searchBtn.addEventListener("click", () => { wordInput.blur(); search(); });
+
+  async function search() {
+    const word = wordInput.value.trim();
+    if (!word) { showError("Խնդրում ենք մուտքագրել բառ"); return; }
+    includeTenses  = includeTensesChk.checked;
+    currentWord    = word;
+    offset         = 0;
+    hasMore        = false;
+    rhymesCache    = [];
+    renderedCount  = 0;
+    totalResults   = 0;
+    resultsSection.style.display = "none";
+    toggleLoadingMore(false);
+    hideError();
+    await fetchRhymes(true);
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+     Fetch rhymes (paginated)
+  ───────────────────────────────────────────────────────────── */
+  async function fetchRhymes(reset = false) {
+    if (isLoading || !currentWord) return;
+    isLoading = true;
+    if (reset) showLoading(true); else toggleLoadingMore(true);
+
+    try {
+      const params = new URLSearchParams({
+        word: currentWord, limit: PAGE_SIZE, offset,
+        include_tenses: includeTenses,
+      });
+      const r = await fetch(`${API_URL}/rhymes?${params}`);
+      if (!r.ok) throw new Error("Network response was not ok");
+      const data = await r.json();
+
+      const newRhymes = (data.rhymes || []).map(enhanceEntry);
+      totalResults = data.total ?? newRhymes.length;
+      hasMore = data.has_more !== undefined
+        ? data.has_more
+        : rhymesCache.length + newRhymes.length < totalResults;
+      offset += newRhymes.length;
+
+      if (reset) { resultsContainer.innerHTML = ""; rhymesCache = [...newRhymes]; }
+      else        { rhymesCache = rhymesCache.concat(newRhymes); }
+
+      renderResults({ word: data.word, total: totalResults, reset });
+    } catch (err) {
+      showError("Սխալ հանգեր որոնելիս · " + err.message);
+    } finally {
+      if (reset) showLoading(false); else toggleLoadingMore(false);
+      isLoading = false;
+    }
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+     POS normalisation (unchanged from original)
+  ───────────────────────────────────────────────────────────── */
+  function normalizePos(pos) {
+    if (!pos) return "";
+    let n = pos.normalize("NFKD").toLowerCase()
+      .replace(/[\u0300-\u036f]/g,"").replace(/[_·]/g," ")
+      .replace(/[–—]/g," ").replace(/-/g," ").replace(/\./g," ")
+      .replace(/&/g," and ").replace(/\s+/g," ").trim();
+    if (!n) return "";
+    const tags = new Set();
+    POS_MULTI.forEach(({pattern,replacement}) => {
+      if (n.match(pattern)) { tags.add(replacement); n = n.replace(pattern," "); }
+    });
+    n.replace(/\s+/g," ").trim().split(/[\s,;:/()]+/)
+      .map(t => POS_ALIAS_MAP[t]||t).filter(t=>t&&t!=="and").forEach(t=>tags.add(t));
+    return Array.from(tags).join(" ");
+  }
+
+  function matchesFilter(normalizedPos, key) {
+    if (!normalizedPos) return false;
+    if (key==="noun" && hasTag(normalizedPos,"proper noun")) return false;
+    return FILTER_MAP[key].some(tag => hasTag(normalizedPos,tag));
+  }
+  function hasTag(n, tag) {
+    return new RegExp(`(^|[\\s,;:/\\-()])${escRe(tag)}(?=$|[\\s,;:/\\-()])`)
+      .test(n);
+  }
+  function escRe(v) { return v.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"); }
+
+  function enhanceEntry(r) {
+    return { ...r, _npos: normalizePos(r.part_of_speech) };
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+     Filter helpers
+  ───────────────────────────────────────────────────────────── */
+  function getFiltered() {
+    if (!activePosFilter) return [...rhymesCache];
+    return rhymesCache.filter(r => matchesFilter(r._npos, activePosFilter));
+  }
+
+  posFilterBtns.forEach(btn => {
+    btn.addEventListener("click", () => {
+      const f = btn.dataset.filter;
+      activePosFilter = activePosFilter === f ? null : f;
+      updateFilterUI();
+      if (!currentWord || !rhymesCache.length) return;
+      renderResults({ word: currentWord, total: totalResults, reset: false, forceRefresh: true });
+    });
+  });
+
+  function updateFilterUI() {
+    posFilterBtns.forEach(btn =>
+      btn.classList.toggle("active", btn.dataset.filter === activePosFilter));
+  }
+  updateFilterUI();
+
+  /* ─────────────────────────────────────────────────────────────
+     Render results
+  ───────────────────────────────────────────────────────────── */
+  function renderResults({ word, total, reset=false, forceRefresh=false }) {
+    heroWord.textContent = word || currentWord;
+
+    const filtered = getFiltered();
+
+    if (!filtered.length) {
+      const msg = activePosFilter
+        ? `Ոչ մի "${activePosFilter}" հանգ չի գտնվել «${word || currentWord}» բառի համար`
+        : `Հանգեր չգտնվեցին «${word || currentWord}» բառի համար`;
+      resultCount.innerHTML = msg;
+      resultsContainer.innerHTML = `<div class="empty-state"><p>${msg}</p></div>`;
+      resultsSection.style.display = "block";
+      renderedCount = 0;
+      return;
+    }
+
+    resultCount.innerHTML =
+      `Ցուցադրվում է <b>${filtered.length.toLocaleString("hy")}</b> արդյունք` +
+      (total ? ` / <span class="mono">${total.toLocaleString("hy")}</span>` : "") +
+      ` · «${word || currentWord}»`;
+
+    if (reset || forceRefresh) {
+      resultsContainer.innerHTML = "";
+      renderedCount = 0;
+    }
+
+    const toAdd = (reset || forceRefresh)
+      ? filtered : filtered.slice(renderedCount);
+
+    if (toAdd.length) {
+      const frag = document.createDocumentFragment();
+      toAdd.forEach(r => frag.appendChild(createChip(r)));
+      resultsContainer.appendChild(frag);
+    }
+
+    renderedCount = filtered.length;
+    resultsSection.style.display = "block";
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+     Chip creation
+  ───────────────────────────────────────────────────────────── */
+  function createChip(r) {
+    const el = document.createElement("div");
+    el.className = "rhyme-chip";
+    el.dataset.label = r.label;
+
+    const posKey = (r.part_of_speech || "").toLowerCase().trim();
+    const posHy  = POS_HY[posKey] || r.part_of_speech || "";
+    const sylNote= r.syllables_matched > 1 ? ` · ${r.syllables_matched} վանկ` : "";
+    const baseNote = (!r.is_base_form && r.base_word && r.base_word !== r.word)
+      ? `<div class="chip-base">← ${r.base_word}</div>` : "";
+
+    el.innerHTML = `
+      <div class="chip-top">
+        <span class="chip-word">${r.word}</span>
+        <span class="chip-sim mono">${Math.round(r.similarity * 100)}</span>
+      </div>
+      <div class="chip-label">${LABEL_HY[r.label] || r.label}</div>
+      <div class="chip-pos">${posHy}${sylNote}</div>
+      ${r.definition ? `<div class="chip-def">${r.definition}</div>` : ""}
+      ${baseNote}`;
+    return el;
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+     Infinite scroll
+  ───────────────────────────────────────────────────────────── */
+  window.addEventListener("scroll", () => {
+    if (!hasMore || isLoading || !currentWord
+        || resultsSection.style.display === "none") return;
+    if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 200) {
+      fetchRhymes(false);
+    }
+  });
+
+  /* ─────────────────────────────────────────────────────────────
+     UI helpers
+  ───────────────────────────────────────────────────────────── */
+  function showLoading(on) { loading.style.display = on ? "flex" : "none"; }
+  function toggleLoadingMore(on) { loadingMore.style.display = on ? "block" : "none"; }
+  function showError(msg) { errorDiv.textContent = msg; errorDiv.style.display = "block"; }
+  function hideError() { errorDiv.style.display = "none"; }
+</script>
+</body>
 </html>
