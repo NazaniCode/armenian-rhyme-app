@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Հանգավորում · Հայերեն հանգերի որոնիչ</title>
+  <link rel="icon" type="image/png" href="assets/favicon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Armenian:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
@@ -38,13 +39,66 @@
 
     /* ── Base ── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html { scroll-behavior: smooth; }
+    html {
+      scroll-behavior: smooth;
+      color-scheme: light;
+      scrollbar-width: auto;
+      scrollbar-color: var(--acc) color-mix(in srgb, var(--line) 48%, transparent);
+    }
+    html::-webkit-scrollbar { width: 16px; }
+    html::-webkit-scrollbar-track {
+      background: color-mix(in srgb, var(--line) 36%, var(--bg));
+    }
+    html::-webkit-scrollbar-thumb {
+      background: var(--acc);
+      border: 4px solid color-mix(in srgb, var(--line) 36%, var(--bg));
+      border-radius: 999px;
+    }
+    html::-webkit-scrollbar-thumb:hover {
+      background: var(--acc-h);
+    }
+    html::-webkit-scrollbar-button {
+      width: 0;
+      height: 0;
+      display: none;
+    }
+    [data-theme="dark"] { color-scheme: dark; }
     body {
       font-family: "Noto Sans Armenian", sans-serif;
       background: var(--bg);
       color: var(--ink);
       min-height: 100vh;
       -webkit-font-smoothing: antialiased;
+    }
+    html.theme-ready body,
+    html.theme-ready .brand-icon,
+    html.theme-ready .search-box,
+    html.theme-ready #wordInput,
+    html.theme-ready #searchBtn,
+    html.theme-ready #autocompleteList,
+    html.theme-ready .autocomplete-item,
+    html.theme-ready .conj-row span,
+    html.theme-ready .sw,
+    html.theme-ready .sw::after,
+    html.theme-ready .error-msg,
+    html.theme-ready .hero-kick,
+    html.theme-ready .hero-word,
+    html.theme-ready #resultCount,
+    html.theme-ready #resultCount b,
+    html.theme-ready .filter-button,
+    html.theme-ready .rhyme-chip,
+    html.theme-ready .chip-sim,
+    html.theme-ready .chip-label,
+    html.theme-ready .chip-pos,
+    html.theme-ready .chip-def,
+    html.theme-ready .chip-base,
+    html.theme-ready .empty-state,
+    html.theme-ready #stats {
+      transition:
+        background-color .42s cubic-bezier(.2, .8, .2, 1),
+        border-color .42s cubic-bezier(.2, .8, .2, 1),
+        box-shadow .42s cubic-bezier(.2, .8, .2, 1),
+        color .42s cubic-bezier(.2, .8, .2, 1);
     }
     .mono { font-family: "JetBrains Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
 
@@ -61,11 +115,54 @@
     }
     .brand-name { font-size: 19px; font-weight: 800; letter-spacing: -.4px; }
     .theme-btn {
-      border: 1.5px solid var(--line); background: var(--surf); color: var(--soft);
-      font-family: inherit; font-size: 13px; font-weight: 700;
-      padding: 7px 18px; border-radius: 999px; cursor: pointer; transition: .15s;
+      --toggle-track: #f2e7d5;
+      --toggle-track-border: #d8c9b0;
+      --toggle-thumb: #fffaf0;
+      --toggle-active: #1c1710;
+      --toggle-muted: #8d806c;
+      width: 174px; height: 48px; border: 2px solid var(--toggle-track-border);
+      background: var(--toggle-track); color: var(--toggle-muted);
+      font-family: inherit; font-size: 16px; font-weight: 800;
+      border-radius: 999px; cursor: pointer; position: relative; isolation: isolate;
+      display: grid; grid-template-columns: 1fr 1fr; align-items: center;
+      padding: 4px; box-shadow: inset 0 0 0 1px rgba(28, 23, 16, .04);
+      transition:
+        background-color .42s cubic-bezier(.2, .8, .2, 1),
+        border-color .42s cubic-bezier(.2, .8, .2, 1),
+        box-shadow .25s ease,
+        color .42s cubic-bezier(.2, .8, .2, 1);
     }
-    .theme-btn:hover { border-color: var(--acc); color: var(--acc); }
+    [data-theme="dark"] .theme-btn {
+      --toggle-track: #15110b;
+      --toggle-track-border: #382f22;
+      --toggle-thumb: #f7eedf;
+      --toggle-active: #1c1710;
+      --toggle-muted: #877b68;
+      box-shadow: inset 0 0 0 1px rgba(247, 238, 223, .03);
+    }
+    .theme-btn::before {
+      content: ""; position: absolute; z-index: -1; top: 4px; bottom: 4px; left: 4px;
+      width: calc(50% - 4px); border-radius: 999px; background: var(--toggle-thumb);
+      box-shadow: 0 2px 8px rgba(28, 23, 16, .18);
+      transition:
+        transform .42s cubic-bezier(.2, .9, .15, 1),
+        background-color .42s cubic-bezier(.2, .8, .2, 1),
+        box-shadow .42s cubic-bezier(.2, .8, .2, 1);
+    }
+    [data-theme="dark"] .theme-btn::before { transform: translateX(calc(100% + 0px)); }
+    .theme-btn:hover { border-color: var(--acc); }
+    .theme-btn:focus-visible {
+      outline: 3px solid color-mix(in srgb, var(--acc) 45%, transparent);
+      outline-offset: 3px;
+    }
+    .theme-option {
+      min-width: 0; text-align: center; line-height: 1; color: var(--toggle-muted);
+      transition: color .32s cubic-bezier(.2, .8, .2, 1), transform .32s cubic-bezier(.2, .8, .2, 1);
+    }
+    [data-theme="light"] .theme-option[data-mode="light"],
+    [data-theme="dark"] .theme-option[data-mode="dark"] {
+      color: var(--toggle-active); transform: scale(1.03);
+    }
 
     /* ── Search ── */
     .search-wrap { position: relative; }
@@ -96,7 +193,28 @@
     #autocompleteList {
       position: absolute; top: 100%; left: 0; right: 0; margin-top: 10px;
       background: var(--surf); border: 2px solid var(--ink); border-radius: 14px;
-      overflow: hidden; z-index: 100; box-shadow: 6px 6px 0 var(--ink);
+      max-height: 50vh; overflow-y: auto; overflow-x: hidden;
+      z-index: 100; box-shadow: 6px 6px 0 var(--ink);
+      scrollbar-gutter: stable;
+      scrollbar-width: thin; scrollbar-color: var(--acc) transparent;
+    }
+    #autocompleteList::-webkit-scrollbar { width: 10px; }
+    #autocompleteList::-webkit-scrollbar-track {
+      background: transparent;
+      margin: 10px 0;
+    }
+    #autocompleteList::-webkit-scrollbar-thumb {
+      background: var(--acc);
+      border: 3px solid var(--surf);
+      border-radius: 999px;
+    }
+    #autocompleteList::-webkit-scrollbar-thumb:hover {
+      background: var(--acc-h);
+    }
+    #autocompleteList::-webkit-scrollbar-button {
+      width: 0;
+      height: 0;
+      display: none;
     }
     .autocomplete-item {
       display: flex; align-items: baseline; gap: 10px;
@@ -211,9 +329,29 @@
     .rhyme-chip[data-label="assonance"]   { --qc: var(--q-asson);   }
     .rhyme-chip[data-label="slant"]       { --qc: var(--q-slant);   }
 
-    .chip-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-    .chip-word { font-size: 25px; font-weight: 800; letter-spacing: -.5px; line-height: 1; }
-    .chip-sim  { font-size: 15px; font-weight: 700; color: var(--qc, var(--soft)); }
+    .chip-top {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 34px;
+      align-items: baseline;
+      gap: 8px;
+    }
+    .chip-word {
+      min-width: 0;
+      overflow: visible;
+      white-space: nowrap;
+      font-size: 25px;
+      font-weight: 800;
+      letter-spacing: 0;
+      line-height: 1.16;
+    }
+    .chip-sim  {
+      width: 34px;
+      justify-self: end;
+      text-align: right;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--qc, var(--soft));
+    }
     .chip-label {
       margin-top: 10px;
       font-size: 10.5px; font-weight: 800; letter-spacing: .04em;
@@ -272,7 +410,10 @@
       <div class="brand-icon">Հ</div>
       <span class="brand-name">Հանգավորում</span>
     </div>
-    <button class="theme-btn" id="themeBtn">Մութ</button>
+    <button class="theme-btn" id="themeBtn" type="button" aria-label="Փոխել գունային ռեժիմը" aria-pressed="false">
+      <span class="theme-option" data-mode="light">Լույս</span>
+      <span class="theme-option" data-mode="dark">Մութ</span>
+    </button>
   </header>
 
   <!-- Search -->
@@ -393,7 +534,7 @@
   let rhymesCache    = [];
   let totalResults   = 0;
   let renderedCount  = 0;
-  let activePosFilter= null;
+  const activePosFilters = new Set();
   let autoLoadTimer  = null;
 
   /* ─────────────────────────────────────────────────────────────
@@ -421,7 +562,8 @@
   (function initTheme() {
     const saved = localStorage.getItem("hangavorum-theme") || "light";
     document.documentElement.setAttribute("data-theme", saved);
-    themeBtn.textContent = saved === "dark" ? "Լույս" : "Մութ";
+    themeBtn.setAttribute("aria-pressed", saved === "dark");
+    requestAnimationFrame(() => document.documentElement.classList.add("theme-ready"));
   })();
 
   themeBtn.addEventListener("click", () => {
@@ -429,7 +571,7 @@
       ? "light" : "dark";
     document.documentElement.setAttribute("data-theme", next);
     localStorage.setItem("hangavorum-theme", next);
-    themeBtn.textContent = next === "dark" ? "Լույս" : "Մութ";
+    themeBtn.setAttribute("aria-pressed", next === "dark");
   });
 
   /* ─────────────────────────────────────────────────────────────
@@ -506,6 +648,8 @@
   searchBtn.addEventListener("click", () => { wordInput.blur(); search(); });
 
   async function search() {
+    clearTimeout(debounceTimer);
+    hideAutocomplete();
     const word = wordInput.value.trim();
     if (!word) { showError("Խնդրում ենք մուտքագրել բառ"); return; }
     includeTenses  = includeTensesChk.checked;
@@ -610,14 +754,16 @@
      Filter helpers
   ───────────────────────────────────────────────────────────── */
   function getFiltered() {
-    if (!activePosFilter) return [...rhymesCache];
-    return rhymesCache.filter(r => matchesFilter(r._npos, activePosFilter));
+    if (!activePosFilters.size) return [...rhymesCache];
+    return rhymesCache.filter(r =>
+      Array.from(activePosFilters).some(filter => matchesFilter(r._npos, filter)));
   }
 
   posFilterBtns.forEach(btn => {
     btn.addEventListener("click", () => {
       const f = btn.dataset.filter;
-      activePosFilter = activePosFilter === f ? null : f;
+      if (activePosFilters.has(f)) activePosFilters.delete(f);
+      else activePosFilters.add(f);
       updateFilterUI();
       if (!currentWord || !rhymesCache.length) return;
       renderResults({ word: currentWord, total: totalResults, reset: false, forceRefresh: true });
@@ -626,10 +772,20 @@
   });
 
   function updateFilterUI() {
-    posFilterBtns.forEach(btn =>
-      btn.classList.toggle("active", btn.dataset.filter === activePosFilter));
+    posFilterBtns.forEach(btn => {
+      const isActive = activePosFilters.has(btn.dataset.filter);
+      btn.classList.toggle("active", isActive);
+      btn.setAttribute("aria-pressed", String(isActive));
+    });
   }
   updateFilterUI();
+
+  function getActiveFilterLabel() {
+    return Array.from(activePosFilters)
+      .map(filter => POS_HY[filter] || getPosLabel(filter))
+      .filter(Boolean)
+      .join(", ");
+  }
 
   /* ─────────────────────────────────────────────────────────────
      Render results
@@ -640,8 +796,8 @@
     const filtered = getFiltered();
 
     if (!filtered.length) {
-      const filterLabel = getPosLabel(activePosFilter);
-      const msg = activePosFilter
+      const filterLabel = getActiveFilterLabel();
+      const msg = activePosFilters.size
         ? `Ոչ մի "${filterLabel}" հանգ չի գտնվել «${word || currentWord}» բառի համար`
         : `Հանգեր չգտնվեցին «${word || currentWord}» բառի համար`;
       resultCount.innerHTML = msg;
@@ -669,6 +825,7 @@
       const frag = document.createDocumentFragment();
       toAdd.forEach(r => frag.appendChild(createChip(r)));
       resultsContainer.appendChild(frag);
+      fitChipWords();
     }
 
     renderedCount = filtered.length;
@@ -701,6 +858,33 @@
     return el;
   }
 
+  function fitChipWord(wordEl) {
+    const maxSize = 25;
+    const minSize = 8;
+    let size = maxSize;
+
+    wordEl.style.fontSize = `${maxSize}px`;
+    if (!wordEl.clientWidth) return;
+
+    while (wordEl.scrollWidth > wordEl.clientWidth && size > minSize) {
+      size -= 0.5;
+      wordEl.style.fontSize = `${size}px`;
+    }
+
+    if (wordEl.scrollWidth > wordEl.clientWidth) {
+      const fittedSize = size * (wordEl.clientWidth / wordEl.scrollWidth);
+      wordEl.style.fontSize = `${Math.max(6, fittedSize)}px`;
+    }
+  }
+
+  function fitChipWords() {
+    requestAnimationFrame(() => {
+      resultsContainer.querySelectorAll(".chip-word").forEach(fitChipWord);
+    });
+  }
+
+  window.addEventListener("resize", fitChipWords);
+
   /* ─────────────────────────────────────────────────────────────
      Infinite scroll
   ───────────────────────────────────────────────────────────── */
@@ -729,8 +913,8 @@
       const doc = document.documentElement;
       const cannotScroll = doc.scrollHeight <= window.innerHeight + 200;
       const filtered = getFiltered();
-      if ((activePosFilter && !filtered.length)
-          || (!activePosFilter && cannotScroll)) {
+      if ((activePosFilters.size && (cannotScroll || !filtered.length))
+          || (!activePosFilters.size && cannotScroll)) {
         fetchRhymes(false);
       }
     }, 0);
