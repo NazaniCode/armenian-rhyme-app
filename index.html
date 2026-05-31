@@ -1,14 +1,68 @@
 <!doctype html>
-<html lang="hy" data-theme="light">
+<html lang="hy">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Հանգավորում · Հայերեն հանգերի որոնիչ</title>
+  <title>Հանգավորում | Հայերեն հանգերի որոնիչ</title>
+  <meta name="description" content="Հանգավորում-ը հայերեն հանգերի որոնիչ է բանաստեղծների, երգահանների և հայերեն տեքստ գրողների համար։ Find Armenian rhymes with an Armenian rhyming dictionary." />
+  <link rel="canonical" href="https://hangavorum.com/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Հանգավորում" />
+  <meta property="og:title" content="Հանգավորում | Հայերեն հանգերի որոնիչ" />
+  <meta property="og:description" content="Գտեք հայերեն բառերի հանգերը՝ հնչյունական նմանությամբ։ Find Armenian rhymes with an Armenian rhyming dictionary." />
+  <meta property="og:url" content="https://hangavorum.com/" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="Հանգավորում | Հայերեն հանգերի որոնիչ" />
+  <meta name="twitter:description" content="Հայերեն հանգերի որոնիչ բանաստեղծների, երգահանների և հայերեն տեքստ գրողների համար։" />
   <link rel="icon" href="/favicon.ico?v=2" sizes="any" />
   <link rel="icon" type="image/png" href="/favicon.png?v=2" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Armenian:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+  <script>
+    (function () {
+      const fallbackTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      let savedTheme = null;
+
+      try {
+        savedTheme = localStorage.getItem("hangavorum-theme");
+      } catch (error) {
+        savedTheme = null;
+      }
+
+      document.documentElement.setAttribute(
+        "data-theme",
+        savedTheme === "light" || savedTheme === "dark" ? savedTheme : fallbackTheme
+      );
+    })();
+  </script>
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebSite",
+          "name": "Հանգավորում",
+          "url": "https://hangavorum.com/",
+          "inLanguage": "hy",
+          "description": "Հայերեն հանգերի որոնիչ"
+        },
+        {
+          "@type": "SoftwareApplication",
+          "name": "Հանգավորում",
+          "applicationCategory": "WritingApplication",
+          "operatingSystem": "Web",
+          "url": "https://hangavorum.com/",
+          "description": "Armenian rhyme finder and Armenian rhyming dictionary for finding rhymes in Armenian.",
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+          }
+        }
+      ]
+    }
+  </script>
   <style>
     /* ── Tokens ── */
     :root {
@@ -72,7 +126,7 @@
       -webkit-font-smoothing: antialiased;
     }
     html.theme-ready body,
-    html.theme-ready .brand-icon,
+    html.theme-ready .brand-home,
     html.theme-ready .search-box,
     html.theme-ready #wordInput,
     html.theme-ready #searchBtn,
@@ -109,12 +163,22 @@
     /* ── Top bar ── */
     .top-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 36px; }
     .brand { display: flex; align-items: center; gap: 11px; }
-    .brand-icon {
+    .brand-home {
       width: 32px; height: 32px; border-radius: 7px;
       background: var(--acc); display: grid; place-items: center;
       color: #fff; font-size: 17px; font-weight: 800; line-height: 1;
+      text-decoration: none; cursor: pointer;
+      transition: background .15s, transform .15s, box-shadow .15s;
     }
-    .brand-name { font-size: 19px; font-weight: 800; letter-spacing: -.4px; }
+    .brand-home:hover {
+      background: var(--acc-h);
+      transform: translateY(-1px);
+      box-shadow: 0 3px 0 var(--ink);
+    }
+    .brand-home:focus-visible {
+      outline: 3px solid color-mix(in srgb, var(--acc) 45%, transparent);
+      outline-offset: 4px;
+    }
     .theme-btn {
       --toggle-track: #f2e7d5;
       --toggle-track-border: #d8c9b0;
@@ -165,6 +229,22 @@
       color: var(--toggle-active); transform: scale(1.03);
     }
 
+    /* ── Intro content ── */
+    .intro { margin: 0 0 28px; max-width: 820px; }
+    .intro h1 {
+      font-size: clamp(42px, 7vw, 84px);
+      line-height: 1;
+      letter-spacing: 0;
+      margin-bottom: 18px;
+    }
+    .intro-copy {
+      color: var(--soft);
+      font-size: 18px;
+      line-height: 1.75;
+      font-weight: 600;
+      max-width: 760px;
+    }
+
     /* ── Search ── */
     .search-wrap { position: relative; }
     .search-box {
@@ -189,6 +269,30 @@
       transition: background .15s;
     }
     #searchBtn:hover { background: var(--acc-h); }
+
+    .popular-searches {
+      margin: 22px 0 26px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      color: var(--soft);
+      font-size: 15px;
+      font-weight: 700;
+    }
+    .popular-searches a {
+      color: var(--ink);
+      background: color-mix(in srgb, var(--surf) 78%, var(--bg));
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 8px 12px;
+      text-decoration: none;
+      transition: border-color .15s, color .15s;
+    }
+    .popular-searches a:hover {
+      color: var(--acc);
+      border-color: var(--acc);
+    }
 
     /* Autocomplete */
     #autocompleteList {
@@ -376,6 +480,74 @@
     }
     .empty-state p { font-size: 16px; font-weight: 600; margin-top: 12px; }
 
+    .seo-content {
+      margin-top: 64px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 28px;
+      color: var(--soft);
+    }
+    .seo-content section {
+      border-top: 2px solid var(--line);
+      padding-top: 20px;
+    }
+    .seo-content h2 {
+      color: var(--ink);
+      font-size: 22px;
+      margin-bottom: 10px;
+    }
+    .seo-content p {
+      line-height: 1.7;
+      font-weight: 600;
+    }
+    .seo-fallback {
+      margin-top: 56px;
+      border-top: 2px solid var(--line);
+      padding-top: 24px;
+    }
+    .seo-fallback h2 {
+      color: var(--ink);
+      font-size: 24px;
+      margin-bottom: 10px;
+    }
+    .seo-fallback p {
+      color: var(--soft);
+      line-height: 1.7;
+      font-weight: 600;
+      max-width: 760px;
+    }
+    .seo-fallback-grid {
+      margin-top: 20px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
+      gap: 12px;
+    }
+    .seo-fallback-result {
+      background: var(--surf);
+      border: 1.5px solid var(--line);
+      border-radius: 13px;
+      padding: 15px 16px 14px;
+    }
+    .seo-fallback-word {
+      display: block;
+      color: var(--ink);
+      font-size: 23px;
+      font-weight: 800;
+      line-height: 1.16;
+      margin-bottom: 8px;
+    }
+    .seo-fallback-meta,
+    .seo-fallback-definition {
+      color: var(--soft);
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.4;
+    }
+    .seo-fallback-definition {
+      margin-top: 8px;
+      font-weight: 600;
+    }
+
     /* Load more / inline spinner */
     #loadingMore { display: none; }
     .inline-spinner-wrap { display: flex; justify-content: center; padding: 32px 0; }
@@ -394,11 +566,14 @@
     /* Responsive */
     @media (max-width: 700px) {
       .app { padding: 24px 20px 60px; }
+      .intro h1 { font-size: 44px; }
+      .intro-copy { font-size: 16px; }
       #wordInput { font-size: 18px; padding: 16px 18px; }
       #searchBtn { padding: 0 22px; font-size: 15px; }
       .hero-word { font-size: 60px; }
       .results-hero { margin-top: 40px; }
       #resultsContainer { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+      .seo-content { grid-template-columns: 1fr; margin-top: 48px; }
     }
   </style>
 </head>
@@ -408,14 +583,21 @@
   <!-- Top bar -->
   <header class="top-bar">
     <div class="brand">
-      <div class="brand-icon">Հ</div>
-      <span class="brand-name">Հանգավորում</span>
+      <a class="brand-home" href="/" aria-label="Վերադառնալ գլխավոր էջ">Հ</a>
     </div>
     <button class="theme-btn" id="themeBtn" type="button" aria-label="Փոխել գունային ռեժիմը" aria-pressed="false">
       <span class="theme-option" data-mode="light">Լույս</span>
       <span class="theme-option" data-mode="dark">Մութ</span>
     </button>
   </header>
+
+  <main>
+  <section class="intro" aria-labelledby="pageTitle">
+    <h1 id="pageTitle">Հանգավորում</h1>
+    <p class="intro-copy">
+      Հայերեն հանգերի որոնիչ բանաստեղծների, երգահանների և հայերեն տեքստ գրողների համար։
+    </p>
+  </section>
 
   <!-- Search -->
   <div class="search-wrap">
@@ -427,6 +609,14 @@
     </div>
     <div id="autocompleteList" style="display:none;"></div>
   </div>
+
+  <nav class="popular-searches" aria-label="Հաճախ որոնվող հանգեր">
+    <span>Հաճախ որոնվող՝</span>
+    <a href="/hy/rhymes/սեր">սեր</a>
+    <a href="/hy/rhymes/լույս">լույս</a>
+    <a href="/hy/rhymes/գարուն">գարուն</a>
+    <a href="/hy/rhymes/հույս">հույս</a>
+  </nav>
 
   <!-- Conjugations toggle -->
   <label class="conj-row" id="conjRow">
@@ -476,6 +666,26 @@
 
   <!-- Dictionary stats footer -->
   <div id="stats"></div>
+
+  <div class="seo-content">
+    <section>
+      <h2>Ինչ է Հանգավորումը</h2>
+      <p>
+        Հանգավորում-ը օգնում է գտնել հայերեն բառերի հնչյունականորեն մոտ հանգեր։
+        Մուտքագրեք հայերեն բառ, և որոնիչը կվերադարձնի կատարյալ, մոտավոր,
+        համահնչյուն և թերի հանգեր։
+      </p>
+    </section>
+    <section lang="en">
+      <h2>Armenian Rhyme Finder</h2>
+      <p>
+        Hangavorum is an Armenian rhyme finder for Armenian words only. It is useful
+        for Armenian poetry, lyrics, and creative writing when you need an Armenian
+        rhyming dictionary.
+      </p>
+    </section>
+  </div>
+  </main>
 
 </div>
 
@@ -561,9 +771,21 @@
      Theme
   ───────────────────────────────────────────────────────────── */
   (function initTheme() {
-    const saved = localStorage.getItem("hangavorum-theme") || "light";
-    document.documentElement.setAttribute("data-theme", saved);
-    themeBtn.setAttribute("aria-pressed", saved === "dark");
+    const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    let savedTheme = null;
+
+    try {
+      savedTheme = localStorage.getItem("hangavorum-theme");
+    } catch (error) {
+      savedTheme = null;
+    }
+
+    const currentTheme = savedTheme === "light" || savedTheme === "dark"
+      ? savedTheme
+      : systemTheme;
+
+    document.documentElement.setAttribute("data-theme", currentTheme);
+    themeBtn.setAttribute("aria-pressed", currentTheme === "dark");
     requestAnimationFrame(() => document.documentElement.classList.add("theme-ready"));
   })();
 
@@ -571,7 +793,9 @@
     const next = document.documentElement.getAttribute("data-theme") === "dark"
       ? "light" : "dark";
     document.documentElement.setAttribute("data-theme", next);
-    localStorage.setItem("hangavorum-theme", next);
+    try {
+      localStorage.setItem("hangavorum-theme", next);
+    } catch (error) {}
     themeBtn.setAttribute("aria-pressed", next === "dark");
   });
 
@@ -590,12 +814,33 @@
      Stats on load
   ───────────────────────────────────────────────────────────── */
   document.addEventListener("DOMContentLoaded", async () => {
+    document.getElementById("seoFallback")?.remove();
+
+    const initialWord = getInitialWord();
+    if (initialWord) {
+      wordInput.value = initialWord;
+      const canonicalPath = `/hy/rhymes/${encodeURIComponent(initialWord)}`;
+      if (window.location.pathname !== canonicalPath) {
+        history.replaceState({}, "", canonicalPath);
+      }
+      search({ updateUrl: false });
+    }
+
     try {
       const r = await fetch(`${API_URL}/stats`);
       const d = await r.json();
       statsEl.textContent = `Բառարան · ${d.total_words.toLocaleString("hy")} բառ`;
     } catch (_) { /* backend not reachable in preview */ }
   });
+
+  function getInitialWord() {
+    if (window.__INITIAL_WORD__) return String(window.__INITIAL_WORD__).trim();
+
+    const pathMatch = window.location.pathname.match(/^\/hy\/rhymes\/(.+)$/);
+    if (pathMatch) return decodeURIComponent(pathMatch[1]).trim();
+
+    return new URLSearchParams(window.location.search).get("word")?.trim() || "";
+  }
 
   /* ─────────────────────────────────────────────────────────────
      Autocomplete
@@ -648,7 +893,7 @@
   ───────────────────────────────────────────────────────────── */
   searchBtn.addEventListener("click", () => { wordInput.blur(); search(); });
 
-  async function search() {
+  async function search({ updateUrl = true } = {}) {
     clearTimeout(debounceTimer);
     hideAutocomplete();
     const word = wordInput.value.trim();
@@ -664,6 +909,9 @@
     cancelAutoLoad();
     toggleLoadingMore(false);
     hideError();
+    if (updateUrl) {
+      history.pushState({}, "", `/hy/rhymes/${encodeURIComponent(word)}`);
+    }
     await fetchRhymes(true);
   }
 

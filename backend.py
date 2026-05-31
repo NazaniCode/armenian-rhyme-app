@@ -13,9 +13,11 @@ import re
 import sqlite3
 import zlib
 from functools import lru_cache
+from html import escape
 from typing import Dict, Iterable, List, Optional, Tuple
+from urllib.parse import quote
 
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, Response, jsonify, request, send_from_directory
 from flask_cors import CORS
 
 from config import AUTOCOMPLETE_LIMIT, DICTIONARY_FILE
@@ -29,6 +31,8 @@ logging.basicConfig(level=logging.INFO)
 CORS(app)
 
 SQLITE_DB_FILE = os.environ.get("DICTIONARY_SQLITE_FILE", "dictionary-hy.db")
+DEFAULT_SITE_URL = "https://hangavorum.com"
+POPULAR_RHYME_WORDS = ["սեր", "լույս", "գարուն", "հույս", "սիրտ", "երազ"]
 
 # Global state
 db_connection: Optional[sqlite3.Connection] = None
@@ -73,10 +77,113 @@ def autocomplete_rank(word: str, query: str) -> Tuple[int, int, str]:
 # ---------------------------------------------------------------------------
 
 
+def site_url() -> str:
+    """Return the public site origin used for canonical and sitemap URLs."""
+    configured = os.environ.get("SITE_URL", DEFAULT_SITE_URL).strip()
+    if configured:
+        return configured.rstrip("/")
+    return request.url_root.rstrip("/")
+
+
+def absolute_url(path: str) -> str:
+    """Build an absolute public URL for SEO metadata."""
+    return f"{site_url()}/{path.lstrip('/')}"
+
+
+def rhyme_page_path(word: str) -> str:
+    """Return the canonical path for a rhyme landing page."""
+    return f"/hy/rhymes/{quote(word, safe='')}"
+
+
+def popular_rhyme_links(current_word: Optional[str] = None) -> List[Tuple[str, str]]:
+    """Return curated internal links, excluding the current page when present."""
+    return [
+        (word, rhyme_page_path(word))
+        for word in POPULAR_RHYME_WORDS
+        if word != current_word
+    ]
+
+
 @app.route("/")
 def home():
     """Serve the single-page application."""
-    return send_from_directory(".", "index.html")
+    return Response(render_app_html(), mimetype="text/html; charset=utf-8")
+
+
+def render_app_html(
+    *,
+    title: Optional[str] = None,
+    description: Optional[str] = None,
+    canonical: Optional[str] = None,
+    og_title: Optional[str] = None,
+    og_description: Optional[str] = None,
+    initial_word: Optional[str] = None,
+    extra_head: str = "",
+    seo_fallback: str = "",
+) -> str:
+    """Render the app shell with optional route-specific SEO metadata."""
+    with open("index.html", "r", encoding="utf-8") as html_file:
+        html = html_file.read().replace(DEFAULT_SITE_URL, site_url())
+
+    if title:
+        html = re.sub(r"<title>.*?</title>", f"<title>{escape(title)}</title>", html, count=1)
+        html = re.sub(
+            r'<meta property="og:title" content="[^"]*" />',
+            f'<meta property="og:title" content="{escape(og_title or title)}" />',
+            html,
+            count=1,
+        )
+        html = re.sub(
+            r'<meta name="twitter:title" content="[^"]*" />',
+            f'<meta name="twitter:title" content="{escape(title)}" />',
+            html,
+            count=1,
+        )
+    if description:
+        html = re.sub(
+            r'<meta name="description" content="[^"]*" />',
+            f'<meta name="description" content="{escape(description)}" />',
+            html,
+            count=1,
+        )
+        html = re.sub(
+            r'<meta property="og:description" content="[^"]*" />',
+            f'<meta property="og:description" content="{escape(og_description or description)}" />',
+            html,
+            count=1,
+        )
+        html = re.sub(
+            r'<meta name="twitter:description" content="[^"]*" />',
+            f'<meta name="twitter:description" content="{escape(description)}" />',
+            html,
+            count=1,
+        )
+    if canonical:
+        html = re.sub(
+            r'<link rel="canonical" href="[^"]*" />',
+            f'<link rel="canonical" href="{escape(canonical)}" />',
+            html,
+            count=1,
+        )
+        html = re.sub(
+            r'<meta property="og:url" content="[^"]*" />',
+            f'<meta property="og:url" content="{escape(canonical)}" />',
+            html,
+            count=1,
+        )
+    if extra_head:
+        html = html.replace("</head>", f"{extra_head}\n</head>", 1)
+    if initial_word:
+        initial_script = (
+            "<script>"
+            f"window.__INITIAL_WORD__ = {json.dumps(initial_word, ensure_ascii=False)};"
+            "</script>"
+        )
+        html = html.replace("</head>", f"{initial_script}\n</head>", 1)
+    if seo_fallback:
+        html = html.replace("</main>", f"{seo_fallback}\n  </main>", 1)
+
+    return html
 
 
 @app.route("/favicon.ico")
@@ -89,6 +196,144 @@ def favicon_ico():
 def favicon_png():
     """Serve the browser tab icon as a PNG fallback."""
     return send_from_directory(".", "favicon.png", mimetype="image/png")
+
+
+@app.route("/robots.txt")
+def robots_txt():
+    """Expose crawl instructions and the sitemap location."""
+    body = "\n".join(
+        [
+            "User-agent: *",
+            "Allow: /",
+            f"Sitemap: {absolute_url('/sitemap.xml')}",
+            "",
+        ]
+    )
+    return Response(body, mimetype="text/plain; charset=utf-8")
+
+
+@app.route("/sitemap.xml")
+def sitemap_xml():
+    """Expose a curated sitemap instead of indexing the full dictionary."""
+    urls = ["/"] + [rhyme_page_path(word) for word in POPULAR_RHYME_WORDS]
+    entries = "\n".join(
+        f"  <url><loc>{escape(absolute_url(path))}</loc></url>" for path in urls
+    )
+    body = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        f"{entries}\n"
+        "</urlset>\n"
+    )
+    return Response(body, mimetype="application/xml; charset=utf-8")
+
+
+@app.route("/hy/rhymes/<path:word>")
+def rhyme_landing_page(word: str):
+    """Render the main app at a crawlable canonical URL for a specific word."""
+    clean_word = word.strip()
+    if not clean_word or not resolve_query_entries(clean_word):
+        return render_rhyme_not_found(clean_word)
+
+    rhymes, total = find_rhymes(clean_word, limit=50, offset=0, include_tenses=False)
+    if not rhymes:
+        return render_rhyme_not_found(clean_word)
+
+    canonical = absolute_url(rhyme_page_path(clean_word))
+    title = f"{clean_word} բառի հանգերը | Հանգավորում"
+    description = (
+        f"Գտեք «{clean_word}» բառի հայերեն հանգերը Հանգավորում որոնիչով։ "
+        "Find Armenian rhymes with an Armenian rhyming dictionary."
+    )
+    breadcrumbs = {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+            {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "Հանգավորում",
+                "item": absolute_url("/"),
+            },
+            {
+                "@type": "ListItem",
+                "position": 2,
+                "name": f"{clean_word} բառի հանգերը",
+                "item": canonical,
+            },
+        ],
+    }
+    extra_head = (
+        f'  <script type="application/ld+json">'
+        f"{json.dumps(breadcrumbs, ensure_ascii=False)}"
+        "</script>"
+    )
+    seo_fallback = render_rhyme_fallback(clean_word, rhymes, total)
+    html = render_app_html(
+        title=title,
+        description=description,
+        canonical=canonical,
+        initial_word=clean_word,
+        extra_head=extra_head,
+        seo_fallback=seo_fallback,
+    )
+    return Response(html, mimetype="text/html; charset=utf-8")
+
+
+def render_rhyme_fallback(word: str, rhymes: List[dict], total: int) -> str:
+    """Render crawlable fallback content that matches the interactive results."""
+    rows = "\n".join(render_rhyme_result_item(rhyme) for rhyme in rhymes)
+    return f"""
+  <section class="seo-fallback" id="seoFallback" aria-label="Սերվերում պատրաստված հանգերի արդյունքներ">
+    <h2>«{escape(word)}» բառի հայերեն հանգերը</h2>
+    <p>{total} արդյունք «{escape(word)}» բառի համար։ Առաջին {len(rhymes)} արդյունքները ներառված են էջի HTML-ում որոնման համակարգերի և JavaScript չօգտագործող այցելուների համար։</p>
+    <div class="seo-fallback-grid">
+      {rows}
+    </div>
+  </section>"""
+
+
+def render_rhyme_result_item(rhyme: dict) -> str:
+    """Render one server-side result card for crawlable rhyme pages."""
+    label = rhyme.get("label", "")
+    similarity = int(round((rhyme.get("similarity") or 0) * 100))
+    definition = rhyme.get("definition") or ""
+    pos = rhyme.get("part_of_speech") or ""
+    definition_html = (
+        f'<div class="seo-fallback-definition">{escape(definition)}</div>' if definition else ""
+    )
+    return (
+        '<article class="seo-fallback-result">'
+        f'<span class="seo-fallback-word">{escape(rhyme.get("word", ""))}</span>'
+        f'<span class="seo-fallback-meta">{escape(label)} · {similarity}%'
+        f'{(" · " + escape(pos)) if pos else ""}</span>'
+        f"{definition_html}"
+        "</article>"
+    )
+
+
+def render_rhyme_not_found(word: str):
+    """Return a noindex 404 page for unknown or thin rhyme pages."""
+    clean_word = word or "բառ"
+    canonical = absolute_url(rhyme_page_path(clean_word))
+    body = f"""<!doctype html>
+<html lang="hy">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex,follow" />
+  <title>Հանգեր չգտնվեցին | Հանգավորում</title>
+  <link rel="canonical" href="{escape(canonical)}" />
+</head>
+<body>
+  <main>
+    <h1>Հանգեր չգտնվեցին «{escape(clean_word)}» բառի համար</h1>
+    <p>Փորձեք մեկ այլ հայերեն բառ կամ վերադարձեք որոնիչ։</p>
+    <a href="/">Բացել Հանգավորում որոնիչը</a>
+  </main>
+</body>
+</html>"""
+    return Response(body, status=404, mimetype="text/html; charset=utf-8")
 
 
 # ---------------------------------------------------------------------------
