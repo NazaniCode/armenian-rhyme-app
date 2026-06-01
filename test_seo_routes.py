@@ -12,7 +12,7 @@ class SeoRoutesTest(unittest.TestCase):
         html = response.get_data(as_text=True)
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn("<title>Հանգավորում | Հայերեն հանգերի որոնիչ</title>", html)
+        self.assertIn("<title>Հայերեն հանգերի որոնիչ | Հանգավորում</title>", html)
         self.assertIn('name="description"', html)
         self.assertIn('rel="canonical"', html)
         self.assertIn('property="og:title"', html)
